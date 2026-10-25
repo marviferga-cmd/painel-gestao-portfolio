@@ -243,6 +243,7 @@ function showLinkModal(user, token, tipo, dias){
 let usersFilter = "todos";
 
 async function renderUsersView(container){
+  const tela = App.currentKey;
   container.innerHTML = loadingHTML();
   let data;
   try { data = await API.get("/admin/usuarios"); }
@@ -342,11 +343,13 @@ async function renderUsersView(container){
     } catch(err){ toast(err.message, "bad"); }
   };
 
+  let mostrados = usuarios;
   function draw(){
     const q = searchEl.value.trim().toLowerCase();
     const lista = usuarios.filter(u =>
       (usersFilter === "todos" || u.status === usersFilter) &&
       (!q || `${u.nome} ${u.email}`.toLowerCase().includes(q)));
+    mostrados = lista;
     const tbody = container.querySelector("#usersBody");
     tbody.innerHTML = lista.map(u => `
       <tr>
@@ -402,6 +405,25 @@ async function renderUsersView(container){
   }));
   container.querySelector("#inviteBtn").addEventListener("click", () => openAccessModal({ modo: "convite", data, onDone: reload }));
   draw();
+
+  App.setExport(tela, () => ({
+    titulo: "Usuários",
+    subtitulo: [
+      `${mostrados.length} de ${usuarios.length} conta(s)`,
+      usersFilter !== "todos" && `Situação: ${STATUS_USUARIO[usersFilter]}`,
+      searchEl.value.trim() && `Busca: "${searchEl.value.trim()}"`,
+    ].filter(Boolean).join(" — "),
+    resumo: filtros.filter(([k]) => k !== "todos").map(([, label, n]) => [label, n, "number"]),
+    colunas: [
+      { label: "Nome", type: "text" }, { label: "E-mail", type: "text" }, { label: "Situação", type: "text" },
+      { label: "Acesso", type: "text" }, { label: "Último acesso", type: "datetime" },
+    ],
+    linhas: mostrados.map(u => [
+      u.nome, u.email, expirado(u) ? "Convite expirado" : STATUS_USUARIO[u.status],
+      u.papel === "admin" ? "Administrador" : u.perfilId ? (perfilNome[u.perfilId] ?? "Perfil") : `Personalizado (${resumoAcessos(u.acessos)})`,
+      u.ultimoAcesso,
+    ]),
+  }));
 }
 
 /* =========================================================
@@ -434,6 +456,7 @@ function openProfileModal({ perfil, base, telas, onDone }){
 }
 
 async function renderProfilesView(container){
+  const tela = App.currentKey;
   container.innerHTML = loadingHTML();
   let data;
   try { data = await API.get("/admin/perfis"); }
@@ -486,6 +509,19 @@ async function renderProfilesView(container){
       </button>
     </div>`;
 
+  App.setExport(tela, () => ({
+    titulo: "Perfis de acesso",
+    subtitulo: `${perfis.length} perfil(is)`,
+    colunas: [
+      { label: "Perfil", type: "text" }, { label: "Descrição", type: "text" }, { label: "Usuários", type: "number" },
+      { label: "Telas para editar", type: "number" }, { label: "Telas só consulta", type: "number" }, { label: "Padrão no cadastro", type: "text" },
+    ],
+    linhas: perfis.map(p => {
+      const v = Object.values(p.acessos || {});
+      return [p.nome, p.descricao || null, p.usuarios, v.filter(x => x === "editar").length, v.filter(x => x === "ver").length, p.id === perfilPadraoId ? "Sim" : null];
+    }),
+  }));
+
   const byId = (id) => perfis.find(p => p.id === Number(id));
   container.querySelector("#newProfile").addEventListener("click", () => openProfileModal({ telas, onDone: reload }));
   container.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", () => openProfileModal({ perfil: byId(b.dataset.edit), telas, onDone: reload })));
@@ -509,6 +545,7 @@ const ACAO = {
 };
 
 async function renderActivityView(container){
+  const tela = App.currentKey;
   const telas = App.meta.groups.filter(g => g.key !== "admin").flatMap(g => g.items);
   const nomeTela = Object.fromEntries(telas.map(t => [t.key, t.label]));
   let itens = [];
@@ -570,6 +607,19 @@ async function renderActivityView(container){
       draw();
     } catch(err){ listEl.innerHTML = errorHTML(err); }
   }
+
+  App.setExport(tela, () => ({
+    titulo: "Histórico de alterações",
+    subtitulo: [
+      `${itens.length} atividade(s) carregada(s)`,
+      telaSel.value && `Tela: ${nomeTela[telaSel.value]}`,
+    ].filter(Boolean).join(" — "),
+    colunas: [
+      { label: "Quando", type: "datetime" }, { label: "Usuário", type: "text" }, { label: "Ação", type: "text" },
+      { label: "Descrição", type: "text" }, { label: "Tela", type: "text" },
+    ],
+    linhas: itens.map(a => [a.quando, a.usuario, (ACAO[a.acao] ?? [a.acao])[0], a.descricao, nomeTela[a.tela] ?? null]),
+  }));
 
   telaSel.addEventListener("change", () => { listEl.innerHTML = loadingHTML(); load(true); });
   moreEl.querySelector("button").addEventListener("click", () => load(false));

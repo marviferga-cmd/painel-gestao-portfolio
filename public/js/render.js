@@ -110,13 +110,15 @@ function compareSortValues(a, b){
   return String(a).localeCompare(String(b), "pt-BR", { numeric: true, sensitivity: "base" });
 }
 
-/* Texto da célula no CSV: dinheiro como número com vírgula (o Excel soma), vazio em vez de "—". */
-function csvValue(col, row){
-  const v = row[col.key];
-  if (col.type === "money") return v === null || v === undefined ? "" : Number(v).toFixed(2).replace(".", ",");
-  if (col.type === "number") return v ?? "";
+/* Coluna da tabela -> exportação: números, dinheiro e datas vão crus (o Excel calcula e ordena);
+   o resto vai como o texto exibido. */
+function exportCol(col){
+  return { label: col.label, type: { number: "number", money: "money", date: "date", datetime: "datetime" }[col.type] || "text" };
+}
+function exportValue(col, row){
+  if (["number", "money", "date", "datetime"].includes(col.type)) return row[col.key] ?? null;
   const t = cellText(col, row);
-  return t === "—" ? "" : t;
+  return t === "—" ? null : t;
 }
 
 function detectFilterColumns(rows, columns){
@@ -128,6 +130,7 @@ function detectFilterColumns(rows, columns){
 }
 
 async function renderTableView(container, item){
+  const tela = App.currentKey;
   container.innerHTML = loadingHTML();
   let rows;
   try { rows = await API.get(`/modules/${item.key}`); }
@@ -170,7 +173,6 @@ async function renderTableView(container, item){
         <div class="panel-actions">
           ${item.key === "colaboradores" && App.meta.user?.papel === "admin"
             ? `<button class="btn btn-ghost" id="importBtn" title="Criar ou atualizar colaboradores a partir de uma planilha">${iconSVG("upload")}Importar planilha</button>` : ""}
-          <button class="btn btn-ghost" id="exportBtn" title="Baixar as linhas filtradas em CSV (abre no Excel)">${iconSVG("download")}Exportar</button>
           ${editable
             ? `<button class="btn btn-primary" id="addRowBtn">+ Adicionar</button>`
             : `<span class="readonly-note">${item.readOnly ? "Calculado automaticamente" : "Somente consulta"}</span>`}
@@ -250,9 +252,29 @@ async function renderTableView(container, item){
     App.refreshNavCounts();
   }
 
-  container.querySelector("#exportBtn").addEventListener("click", () => {
-    const hoje = new Date().toISOString().slice(0, 10);
-    downloadCSV(`${item.key}-${hoje}.csv`, visible.map(c => c.label), filtered.map(row => visible.map(c => csvValue(c, row))));
+  // exporta o que está na tela: filtros e ordenação aplicados
+  App.setExport(tela, () => {
+    const filtros = [
+      searchEl.value.trim() && `Busca: "${searchEl.value.trim()}"`,
+      ...selects.filter(s => s.value).map(s => `${visible.find(c => c.key === s.dataset.filterCol).label}: ${s.value}`),
+    ].filter(Boolean);
+    const ordem = visible.find(c => c.key === sort.key);
+    const info = [
+      `${filtered.length} de ${rows.length} registro(s)`,
+      filtros.length && `Filtros: ${filtros.join(" · ")}`,
+      ordem && `Ordenado por ${ordem.label} (${sort.dir === 1 ? "crescente" : "decrescente"})`,
+    ].filter(Boolean).join(" — ");
+    const resumo = [["Registros", filtered.length, "number"]];
+    if (statusCol){
+      const cont = new Map();
+      filtered.forEach(r => { const t = cellText(statusCol, r); cont.set(t, (cont.get(t) || 0) + 1); });
+      [...cont.entries()].sort((a, b) => b[1] - a[1]).forEach(([t, n]) => resumo.push([`${statusCol.label}: ${t}`, n, "number"]));
+    }
+    return {
+      titulo: item.label, subtitulo: info, resumo,
+      colunas: visible.map(exportCol),
+      linhas: filtered.map(row => visible.map(c => exportValue(c, row))),
+    };
   });
 
   container.querySelector("#importBtn")?.addEventListener("click", () => openImportModal(afterChange));
@@ -289,6 +311,7 @@ async function renderTableView(container, item){
    KANBAN
    ========================================================= */
 async function renderKanbanView(container, item){
+  const tela = App.currentKey;
   const board = "pessoas";
   container.innerHTML = loadingHTML();
   let data;
@@ -325,6 +348,14 @@ async function renderKanbanView(container, item){
       </div>
     </div>
   `;
+
+  App.setExport(tela, () => ({
+    titulo: item.label,
+    subtitulo: `${data.cards.length} card(s)`,
+    resumo: data.columns.map(col => [col.titulo, data.cards.filter(c => c.colunaId === col.id).length, "number"]),
+    colunas: [{ label: "Coluna", type: "text" }, { label: "Card", type: "text" }, { label: "Etiqueta", type: "text" }],
+    linhas: data.columns.flatMap(col => data.cards.filter(c => c.colunaId === col.id).map(c => [col.titulo, c.titulo, c.etiqueta || null])),
+  }));
 
   if (!canEdit) return;
 
@@ -403,6 +434,7 @@ async function renderKanbanView(container, item){
    RELATÓRIOS — consolidado por cliente
    ========================================================= */
 async function renderReportView(container, item){
+  const tela = App.currentKey;
   container.innerHTML = loadingHTML();
   let rows;
   try { rows = await API.get("/resumo/clientes"); }
@@ -441,12 +473,29 @@ async function renderReportView(container, item){
       </div>
     </div>
   `;
+
+  App.setExport(tela, () => ({
+    titulo: `${item.label} por cliente`,
+    subtitulo: "Calculado a partir de OS, Faturamento e Chamados",
+    resumo: [
+      ["Clientes", rows.length, "number"], ["OS abertas", tot.osAbertas, "number"],
+      ["Faturado", tot.faturado, "money"], ["A receber", tot.emAberto, "money"],
+      ["Chamados atrasados", tot.atrasados, "number"],
+    ],
+    colunas: [
+      { label: "Cliente", type: "text" }, { label: "OS (total)", type: "number" }, { label: "OS abertas", type: "number" },
+      { label: "Faturado", type: "money" }, { label: "A receber", type: "money" },
+      { label: "Chamados abertos", type: "number" }, { label: "Chamados atrasados", type: "number" },
+    ],
+    linhas: rows.map(r => [r.cliente, r.osTotal, r.osAbertas, r.faturado, r.emAberto, r.chamadosAbertos, r.chamadosAtrasados]),
+  }));
 }
 
 /* =========================================================
    INDICADORES — OS e financeiro
    ========================================================= */
 async function renderIndicatorsView(container){
+  const tela = App.currentKey;
   container.innerHTML = loadingHTML();
   let data;
   try { data = await API.get("/resumo/os"); }
@@ -483,12 +532,30 @@ async function renderIndicatorsView(container){
       </div>
     </div>
   `;
+
+  App.setExport(tela, () => ({
+    titulo: "Indicadores de ordens de serviço",
+    subtitulo: "Ordens de serviço ordenadas por prazo",
+    resumo: [
+      ["OS abertas", k.osAbertas, "number"], ["OS concluídas", k.osConcluidas, "number"],
+      ["OS fora do prazo", k.osAtrasadas, "number"], ["OS abertas por colaborador", k.osPorColaborador.toFixed(1).replace(".", ",")],
+      ["Faturado", k.faturado, "money"], ["Recebido", k.recebido, "money"],
+      ["Em aberto", k.emAberto, "money"], ["Vencido", k.vencido, "money"],
+    ],
+    colunas: [
+      { label: "OS", type: "text" }, { label: "Cliente", type: "text" }, { label: "Serviço", type: "text" },
+      { label: "Responsável", type: "text" }, { label: "Prazo", type: "date" }, { label: "Status", type: "text" },
+      { label: "Situação", type: "text" },
+    ],
+    linhas: data.ordens.map(r => [r.numero, r.cliente, r.servico, r.responsavel, r.prazo, r.status, r.atrasada ? "Atrasada" : null]),
+  }));
 }
 
 /* =========================================================
    SLA DASHBOARD — medidor + lista de atenção
    ========================================================= */
 async function renderSlaDashboardView(container){
+  const tela = App.currentKey;
   container.innerHTML = loadingHTML();
   let d;
   try { d = await API.get("/resumo/sla"); }
@@ -556,6 +623,22 @@ async function renderSlaDashboardView(container){
     </div>
   `;
   container.querySelector("[data-go]").addEventListener("click", e => App.navigate(e.currentTarget.dataset.go));
+
+  App.setExport(tela, () => ({
+    titulo: "Monitoramento de SLA",
+    subtitulo: "Chamados abertos; tempo restante calculado no momento da exportação da tela",
+    resumo: [
+      ["Abertos no prazo", pct, "percent"], ["Chamados abertos", d.abertos, "number"],
+      ["No prazo", d.noPrazo, "number"], ["Em risco (atenção + crítico)", emRisco, "number"],
+      ["Atrasados", d.atrasado, "number"],
+      ["Concluídos no SLA (30 dias)", pct30 === null ? "Sem chamados concluídos" : pct30, pct30 === null ? "text" : "percent"],
+    ],
+    colunas: [
+      { label: "Chamado", type: "text" }, { label: "Cliente", type: "text" }, { label: "Responsável", type: "text" },
+      { label: "Prazo", type: "datetime" }, { label: "Tempo restante", type: "text" }, { label: "Risco", type: "text" },
+    ],
+    linhas: d.rows.map(r => [r.chamado, r.cliente, r.responsavel, r.prazoEm, r.tempoRestante, r.status]),
+  }));
 }
 
 /* =========================================================
@@ -573,6 +656,7 @@ function getMondayOfWeek(date){
 }
 
 async function renderWeekView(container, item){
+  const tela = App.currentKey;
   const monday = getMondayOfWeek(App.weekAnchor);
   const nextMonday = new Date(monday); nextMonday.setDate(monday.getDate() + 7);
 
@@ -625,6 +709,22 @@ async function renderWeekView(container, item){
   `;
 
   const reload = () => renderWeekView(container, item);
+
+  App.setExport(tela, () => ({
+    titulo: item.label,
+    subtitulo: `Semana de ${fmt(monday)} a ${fmt(sunday)}/${sunday.getFullYear()}`,
+    colunas: [
+      { label: "Data", type: "date" }, { label: "Dia", type: "text" }, { label: "Horário", type: "text" },
+      { label: "Descrição", type: "text" }, { label: "Módulo", type: "text" },
+    ],
+    linhas: events.map(ev => {
+      const t = new Date(ev.inicio);
+      return [
+        t.toLocaleDateString("en-CA"), t.toLocaleDateString("pt-BR", { weekday: "long" }),
+        t.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }), ev.titulo, MODULO_LABEL[ev.modulo] || "Geral",
+      ];
+    }),
+  }));
   container.querySelector("#weekPrev").addEventListener("click", () => { App.weekAnchor.setDate(App.weekAnchor.getDate() - 7); reload(); });
   container.querySelector("#weekNext").addEventListener("click", () => { App.weekAnchor.setDate(App.weekAnchor.getDate() + 7); reload(); });
   container.querySelector("#weekToday").addEventListener("click", () => { App.weekAnchor = new Date(); reload(); });

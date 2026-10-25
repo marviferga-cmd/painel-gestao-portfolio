@@ -37,6 +37,9 @@ function cliente() {
 const a = cliente();
 
 await a.expect(200, "GET", "/healthz");
+// bibliotecas da exportação PDF/Excel saem do node_modules: falham se a imagem de deploy não as tiver
+for (const f of ["jspdf.js", "jspdf-autotable.js", "exceljs.js"]) await a.expect(200, "GET", `/vendor/${f}`);
+await a.expect(404, "GET", "/vendor/package.json");
 await a.expect(401, "GET", "/api/meta");
 await a.expect(401, "POST", "/api/auth/login", { email: EMAIL, senha: "senha-errada" });
 await a.expect(200, "POST", "/api/auth/login", { email: EMAIL, senha: SENHA });

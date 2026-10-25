@@ -109,8 +109,44 @@ const App = {
     });
   },
 
+  /* ---------------- EXPORTAR ----------------
+     Cada tela chama setExport(App.currentKey capturado no início do render, () => dados).
+     Ignora quem terminou de carregar depois que o usuário já trocou de tela. */
+  exportSource: null,
+
+  setExport(tela, fn){
+    if (tela !== this.currentKey) return;
+    this.exportSource = fn;
+    document.getElementById("exportMenu").hidden = !fn;
+    if (!fn) this.setExportPop(false);
+  },
+
+  setExportPop(open){
+    document.getElementById("exportPop").hidden = !open;
+    document.getElementById("exportBtn").setAttribute("aria-expanded", String(open));
+  },
+
+  async runExport(tipo){
+    this.setExportPop(false);
+    if (!this.exportSource) return;
+    const btn = document.getElementById("exportBtn");
+    btn.setAttribute("aria-busy", "true");
+    try {
+      const tela = this.findItem(this.currentKey);
+      const dados = { arquivo: this.currentKey, grupo: tela?.group.label, ...this.exportSource() };
+      await (tipo === "pdf" ? Exporter.pdf(dados) : Exporter.excel(dados));
+      toast(tipo === "pdf" ? "PDF gerado" : "Planilha gerada");
+    } catch(err){
+      console.error(err);
+      toast(err.message || "Não foi possível exportar", "bad");
+    } finally {
+      btn.removeAttribute("aria-busy");
+    }
+  },
+
   async navigate(key, { replace = false } = {}){
     this.currentKey = key;
+    this.setExport(key, null);
     if (!replace) history.pushState(null, "", key === "home" ? location.pathname : `#${key}`);
     document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.key === key));
     document.querySelector(".nav-home")?.classList.toggle("active", key === "home");
@@ -368,6 +404,13 @@ const App = {
       try { saved = localStorage.getItem("theme"); } catch {}
       if (!saved) this.setTheme(e.matches ? "light" : "dark");
     });
+
+    const exportBtn = document.getElementById("exportBtn");
+    const exportPop = document.getElementById("exportPop");
+    exportBtn.addEventListener("click", (e) => { e.stopPropagation(); this.setExportPop(exportPop.hidden); });
+    exportPop.querySelectorAll("[data-export]").forEach(b => b.addEventListener("click", () => this.runExport(b.dataset.export)));
+    document.addEventListener("click", (e) => { if (!exportPop.hidden && !exportPop.contains(e.target)) this.setExportPop(false); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") this.setExportPop(false); });
 
     const chip = document.getElementById("userChip");
     const pop = document.getElementById("userPop");

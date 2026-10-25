@@ -1057,6 +1057,13 @@ tr:hover .icon-btn{ opacity:1; }
    MENU DO USUÁRIO (topbar)
    ========================================================= */
 .user-menu{ position:relative; }
+
+/* exportar (PDF / Excel) */
+.export-menu{ position:relative; }
+.export-menu[hidden]{ display:none; }
+.export-pop{ min-width:240px; }
+.export-pop button small{ display:block; font-size:11px; color:var(--muted); font-weight:400; margin-top:1px; }
+#exportBtn[aria-busy="true"]{ opacity:.6; cursor:wait; }
 .user-chip{
   display:inline-flex; align-items:center; gap:8px;
   height:36px; padding:0 12px 0 4px;

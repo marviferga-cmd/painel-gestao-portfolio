@@ -30,8 +30,11 @@
     "@prisma/adapter-pg": "6.19.3",
     "@prisma/client": "6.19.3",
     "compression": "^1.8.1",
+    "exceljs": "4.4.0",
     "express": "^5.2.1",
     "helmet": "^8.1.0",
+    "jspdf": "4.2.1",
+    "jspdf-autotable": "5.0.8",
     "pg": "^8.23.1",
     "prisma": "6.19.3"
   }

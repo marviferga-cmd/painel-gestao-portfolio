@@ -88,21 +88,6 @@ async function copyText(text){
   catch { window.prompt("Copie o texto abaixo:", text); return false; }
 }
 
-/* baixa um CSV que o Excel em português abre direto (BOM + ponto e vírgula) */
-function downloadCSV(filename, header, rows){
-  const cell = v => {
-    const s = String(v ?? "");
-    return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const csv = "﻿" + [header, ...rows].map(r => r.map(cell).join(";")).join("\r\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-}
-
 function timeAgo(iso){
   if (!iso) return "—";
   const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);

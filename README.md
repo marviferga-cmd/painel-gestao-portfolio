@@ -177,7 +177,13 @@ Telas calculadas (relatórios, indicadores, dashboards) só aceitam *Ver*. Admin
 
 **Segurança.** Senhas com scrypt; sessão em cookie `HttpOnly` de 7 dias; no banco ficam só os hashes SHA-256 dos tokens de sessão e de convite; limite de tentativas por IP guardado no banco (vale entre reinícios e com mais de uma instância; no login só contam as senhas erradas); trocar a senha desconecta os outros dispositivos.
 
-**Tabelas.** Clique no cabeçalho para ordenar (crescente → decrescente → original). **Exportar** baixa o que está na tela, com filtros e ordenação; valores em dinheiro saem como número, para o Excel somar. Cada tela carrega até 2000 registros; acima disso, a contagem avisa.
+**Tabelas.** Clique no cabeçalho para ordenar (crescente → decrescente → original). Cada tela carrega até 2000 registros; acima disso, a contagem avisa.
+
+**Exportar (PDF ou Excel).** O botão *Exportar*, no topo, aparece em toda tela com dados (cadastros, Kanban, relatórios, indicadores, SLA, agenda, usuários, perfis e histórico) e baixa exatamente o que está na tela, com filtros e ordenação:
+- **PDF** — cabeçalho com o painel e a seção, filtros aplicados, indicadores-resumo e a tabela, paginado (A4, deitado quando há muitas colunas).
+- **Excel (.xlsx)** — mesmos dados, com dinheiro, números e datas como valores de verdade (dá para somar e filtrar), cabeçalho congelado e filtro automático.
+
+Os arquivos são gerados no navegador (jsPDF e ExcelJS, servidos pelo próprio painel em `/vendor`, carregados só no primeiro uso). 
 
 ## Regras de SLA
 
