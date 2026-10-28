@@ -183,13 +183,13 @@ function openAccessModal({ modo, user, data, onDone }){
   }
 
   submitWith(form, async () => {
-    const perfilId = perfilSel.value === "" ? null : Number(perfilSel.value);
+    const perfilId = perfilSel.value || null;
     const body = {
       papel: form.querySelector("input[name=papel]:checked").value,
       perfilId,
       acessos: perfilId === null ? readMatrix(form) : {},
     };
-    if (colabSel) body.colaboradorId = colabSel.value === "" ? null : Number(colabSel.value);
+    if (colabSel) body.colaboradorId = colabSel.value || null;
 
     if (modo === "convite"){
       body.nome = form.elements.nome.value.trim();
@@ -328,7 +328,7 @@ async function renderUsersView(container){
     </div>`;
 
   const searchEl = container.querySelector("#userSearch");
-  const byId = (id) => usuarios.find(u => u.id === Number(id));
+  const byId = (id) => usuarios.find(u => u.id === id);
   const run = async (fn, okMsg) => {
     try { await fn(); toast(okMsg); }
     catch(err){ toast(err.message, "bad"); }
@@ -366,7 +366,7 @@ async function renderUsersView(container){
       openAccessModal({ modo: btn.dataset.act, user: u, data, onDone: reload });
     }));
 
-    tbody.querySelectorAll("[data-more]").forEach(sel => sel.addEventListener("change", () => {
+    tbody.querySelectorAll("[data-more]").forEach(sel => sel.addEventListener("change", async () => {
       const u = byId(sel.dataset.more);
       const act = sel.value;
       sel.value = "";
@@ -374,13 +374,16 @@ async function renderUsersView(container){
         case "editar": openAccessModal({ modo: "editar", user: u, data, onDone: reload }); break;
         case "link": novoLink(u); break;
         case "bloquear":
-          if (confirm(`Bloquear o acesso de ${u.nome}? A pessoa será desconectada.`))
+          if (await App.confirm({ title: "Bloquear acesso", message: `${u.nome} será desconectado(a) e não conseguirá entrar até ser desbloqueado(a).`, confirmLabel: "Bloquear", danger: true }))
             run(() => API.patch(`/admin/usuarios/${u.id}`, { status: "bloqueado" }), "Acesso bloqueado");
           break;
         case "ativar": run(() => API.patch(`/admin/usuarios/${u.id}`, { status: "ativo" }), "Acesso liberado"); break;
         case "recusar":
         case "excluir":
-          if (confirm(`${act === "excluir" && u.status === "convidado" ? "Cancelar o convite de" : "Excluir a conta de"} ${u.nome}? Essa ação não pode ser desfeita.`))
+          if (await App.confirm({
+            title: u.status === "convidado" ? "Cancelar convite" : "Excluir conta",
+            message: `${u.status === "convidado" ? "O convite de" : "A conta de"} ${u.nome} será removida. Essa ação não pode ser desfeita.`,
+            confirmLabel: u.status === "convidado" ? "Cancelar convite" : "Excluir conta", danger: true }))
             run(() => API.del(`/admin/usuarios/${u.id}`), u.status === "convidado" ? "Convite cancelado" : "Conta excluída");
           break;
         case "senha":
@@ -486,14 +489,14 @@ async function renderProfilesView(container){
       </button>
     </div>`;
 
-  const byId = (id) => perfis.find(p => p.id === Number(id));
+  const byId = (id) => perfis.find(p => p.id === id);
   container.querySelector("#newProfile").addEventListener("click", () => openProfileModal({ telas, onDone: reload }));
   container.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", () => openProfileModal({ perfil: byId(b.dataset.edit), telas, onDone: reload })));
   container.querySelectorAll("[data-dup]").forEach(b => b.addEventListener("click", () => openProfileModal({ base: byId(b.dataset.dup), telas, onDone: reload })));
   container.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", async () => {
     const p = byId(b.dataset.del);
     const aviso = p.usuarios ? `\n\n${p.usuarios} usuário(s) continuarão com as mesmas permissões, como acesso personalizado.` : "";
-    if (!confirm(`Excluir o perfil "${p.nome}"?${aviso}`)) return;
+    if (!(await App.confirm({ title: "Excluir perfil", message: `Excluir o perfil "${p.nome}"?${aviso}`, confirmLabel: "Excluir perfil", danger: true }))) return;
     try { await API.del(`/admin/perfis/${p.id}`); toast("Perfil excluído"); }
     catch(err){ toast(err.message, "bad"); }
     reload();
@@ -562,7 +565,7 @@ async function renderActivityView(container){
   async function load(reset){
     const params = new URLSearchParams();
     if (telaSel.value) params.set("tela", telaSel.value);
-    if (!reset && itens.length) params.set("antes", itens[itens.length - 1].id);
+    if (!reset && itens.length) params.set("antes", itens[itens.length - 1].quando);
     try {
       const novos = await API.get(`/admin/atividades?${params}`);
       itens = reset ? novos : itens.concat(novos);
@@ -672,7 +675,7 @@ async function renderSettingsView(container){
         subtitulo: form.elements.subtitulo.value,
         corDestaque: form.querySelector("input[name=corDestaque]:checked").value,
         cadastroAberto: form.elements.cadastroAberto.checked,
-        perfilPadraoId: form.elements.perfilPadraoId.value === "" ? null : Number(form.elements.perfilPadraoId.value),
+        perfilPadraoId: form.elements.perfilPadraoId.value || null,
         diasConvite: Number(form.elements.diasConvite.value),
       });
       App.applyBranding(salvo);

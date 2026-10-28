@@ -1,4 +1,4 @@
-# Painel de Gestão v3
+# Painel de Gestão v4
 
 Painel único de **Gestão de Pessoas**, **Ordens de Serviço** e **Monitoramento de SLA**, agora com backend próprio e banco relacional:
 
@@ -25,25 +25,49 @@ Painel único de **Gestão de Pessoas**, **Ordens de Serviço** e **Monitorament
 ```
 painel-gestao/
 ├── prisma/
-│   ├── schema.prisma               → modelo de dados (20 tabelas)
+│   ├── schema.prisma               → modelo de dados (23 tabelas, chaves UUID)
 │   ├── migrations/                 → SQL versionado (aplicado com migrate deploy)
-│   └── seed.js                     → dados de exemplo
+│   ├── seed.js                     → dados de exemplo
+│   └── importar-colaboradores.js   → importação de planilha (CSV)
 ├── src/
 │   ├── server.js                   → Express, segurança, login, arquivos estáticos
-│   ├── routes.js                   → rotas /api
 │   ├── auth.js                     → login, cadastro, convites, sessões, nível de acesso por tela
-│   ├── admin.js                    → /api/admin: usuários, convites, perfis, configurações, histórico
 │   ├── config.js                   → configurações do painel + registro de atividades
-│   ├── modules.js                  → definição dos módulos (colunas, validações, cálculos)
+│   ├── modules.js                  → definição das telas (colunas, validações, cálculos)
 │   ├── crud.js                     → CRUD genérico + listas para os selects
 │   ├── db.js                       → Prisma Client (driver pg, sem binário nativo)
-│   └── lib/format.js               → datas, horas, dinheiro, regras de SLA
-├── public/                         → frontend (index.html, login.html, convite.html, css, js)
+│   ├── routes/
+│   │   ├── index.js                → monta /api, /meta e tratamento de erros
+│   │   ├── dados.js                → /modules e /lookups (tabelas genéricas)
+│   │   ├── kanban.js · eventos.js  → quadro de tarefas e agenda
+│   │   ├── resumos.js              → indicadores e visão geral (/resumo/*)
+│   │   └── admin.js                → usuários, convites, perfis, configurações, histórico, importação
+│   └── lib/
+│       ├── format.js               → datas, horas, dinheiro, regras de SLA
+│       └── http.js                 → validação de UUID e tradução de erros
+├── public/
+│   ├── index.html · login.html · convite.html
+│   ├── css/style.css               → tema claro/escuro e cores de destaque
+│   └── js/
+│       ├── core/                   → ícones, utilitários, cliente da API, tema
+│       ├── views/                  → uma tela por arquivo (home, tabela, kanban, agenda, sla, relatórios, admin)
+│       └── app.js                  → menu, rotas, busca Ctrl+K, modais e confirmações
+├── scripts/check.js                → verificação de sintaxe de todo o JS (npm run check)
 ├── Dockerfile · docker-compose.yml · railway.json · render.yaml
 └── .env.example
 ```
 
-Para **adicionar uma coluna** a um módulo: inclua o campo no `schema.prisma`, rode `npm run db:migrate -- --name nome-da-mudanca` e acrescente a coluna em `src/modules.js`. Tabela, filtros e formulário se ajustam sozinhos.
+Para **adicionar uma coluna** a uma tela: inclua o campo no `schema.prisma`, rode `npm run db:migrate -- --name nome-da-mudanca` e acrescente a coluna em `src/modules.js`. Tabela, filtros, ordenação, exportação e formulário se ajustam sozinhos (`filter: true` cria um filtro para colunas de texto).
+
+**Identificadores.** Todas as tabelas usam UUID (`gen_random_uuid()` no PostgreSQL). A API recusa IDs em outro formato com `400 id inválido`.
+
+## Recursos da interface
+
+- **Visão geral**: indicadores de pessoas, cobertura do contrato, férias, afastamentos, OS, SLA e financeiro, além de uma lista "Precisa de atenção" e dos próximos eventos. Cada bloco só aparece para quem pode ver a tela de origem.
+- **Tabelas**: busca, filtros, ordenação por coluna (clique no cabeçalho), paginação (25/50/100), cabeçalho fixo, exportação CSV e duplo clique na linha para editar.
+- **Busca rápida**: `Ctrl+K` (ou `⌘K`) abre a busca de telas de qualquer lugar.
+- **Menu lateral** com grupos recolhíveis (a escolha fica salva no navegador) e trilha de navegação no topo.
+- **Confirmações** próprias para ações destrutivas, tema claro/escuro e 6 cores de destaque.
 
 ## Rodando localmente
 
@@ -129,7 +153,7 @@ Nome do painel, cor, cadastro público, perfil padrão e validade dos convites f
 | GET | `/api/lookups/:lista` | Opções dos selects (`colaboradores`, `clientes`, `servicos`, `cargos`, `ordens`, `faturas`) |
 | GET / POST / PATCH / DELETE | `/api/kanban/...` | Quadro Kanban |
 | GET / POST / DELETE | `/api/eventos` | Agenda (`?de=ISO&ate=ISO`) |
-| GET | `/api/resumo/os` · `/clientes` · `/sla` · `/alertas` | Indicadores calculados |
+| GET | `/api/resumo/geral` · `/os` · `/clientes` · `/sla` · `/alertas` | Visão geral e indicadores calculados |
 | POST | `/api/auth/login` · `/cadastro` · `/logout` · `/senha` | Sessão e conta do usuário |
 | GET | `/api/auth/config` | Nome, cor e se o cadastro público está aberto (usado no login) |
 | GET / POST | `/api/auth/convite[/:token]` | Valida o link e define a senha (convite ou redefinição) |

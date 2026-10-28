@@ -1,0 +1,236 @@
+-- IDs passam de inteiro sequencial para UUID em todas as tabelas.
+-- Os vínculos são preservados: cada chave estrangeira é traduzida para o UUID
+-- novo do registro pai antes de as colunas antigas saírem. Tudo numa transação:
+-- se qualquer passo falhar, o banco fica exatamente como estava.
+
+BEGIN;
+
+-- 1. UUID novo em cada registro
+ALTER TABLE "clientes" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "cargos" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "colaboradores" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "servicos" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "ferias" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "afastamentos" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "banco_horas" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "equipamentos" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "contratacoes" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "contratos" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "kanban_colunas" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "kanban_cards" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "ordens_servico" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "faturas" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "notas_fiscais" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "chamados" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "eventos" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "usuarios" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "perfis" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE "atividades" ADD COLUMN "uid" UUID NOT NULL DEFAULT gen_random_uuid();
+
+-- 2. Chaves estrangeiras traduzidas para o UUID do pai
+ALTER TABLE "colaboradores" ADD COLUMN "cargo_id__uid" UUID;
+UPDATE "colaboradores" f SET "cargo_id__uid" = p."uid" FROM "cargos" p WHERE f."cargo_id" = p."id";
+ALTER TABLE "ferias" ADD COLUMN "colaborador_id__uid" UUID;
+UPDATE "ferias" f SET "colaborador_id__uid" = p."uid" FROM "colaboradores" p WHERE f."colaborador_id" = p."id";
+ALTER TABLE "afastamentos" ADD COLUMN "colaborador_id__uid" UUID;
+UPDATE "afastamentos" f SET "colaborador_id__uid" = p."uid" FROM "colaboradores" p WHERE f."colaborador_id" = p."id";
+ALTER TABLE "banco_horas" ADD COLUMN "colaborador_id__uid" UUID;
+UPDATE "banco_horas" f SET "colaborador_id__uid" = p."uid" FROM "colaboradores" p WHERE f."colaborador_id" = p."id";
+ALTER TABLE "equipamentos" ADD COLUMN "responsavel_id__uid" UUID;
+UPDATE "equipamentos" f SET "responsavel_id__uid" = p."uid" FROM "colaboradores" p WHERE f."responsavel_id" = p."id";
+ALTER TABLE "contratos" ADD COLUMN "cliente_id__uid" UUID;
+UPDATE "contratos" f SET "cliente_id__uid" = p."uid" FROM "clientes" p WHERE f."cliente_id" = p."id";
+ALTER TABLE "kanban_cards" ADD COLUMN "coluna_id__uid" UUID;
+UPDATE "kanban_cards" f SET "coluna_id__uid" = p."uid" FROM "kanban_colunas" p WHERE f."coluna_id" = p."id";
+ALTER TABLE "ordens_servico" ADD COLUMN "cliente_id__uid" UUID;
+UPDATE "ordens_servico" f SET "cliente_id__uid" = p."uid" FROM "clientes" p WHERE f."cliente_id" = p."id";
+ALTER TABLE "ordens_servico" ADD COLUMN "servico_id__uid" UUID;
+UPDATE "ordens_servico" f SET "servico_id__uid" = p."uid" FROM "servicos" p WHERE f."servico_id" = p."id";
+ALTER TABLE "ordens_servico" ADD COLUMN "responsavel_id__uid" UUID;
+UPDATE "ordens_servico" f SET "responsavel_id__uid" = p."uid" FROM "colaboradores" p WHERE f."responsavel_id" = p."id";
+ALTER TABLE "faturas" ADD COLUMN "cliente_id__uid" UUID;
+UPDATE "faturas" f SET "cliente_id__uid" = p."uid" FROM "clientes" p WHERE f."cliente_id" = p."id";
+ALTER TABLE "faturas" ADD COLUMN "ordem_id__uid" UUID;
+UPDATE "faturas" f SET "ordem_id__uid" = p."uid" FROM "ordens_servico" p WHERE f."ordem_id" = p."id";
+ALTER TABLE "notas_fiscais" ADD COLUMN "cliente_id__uid" UUID;
+UPDATE "notas_fiscais" f SET "cliente_id__uid" = p."uid" FROM "clientes" p WHERE f."cliente_id" = p."id";
+ALTER TABLE "notas_fiscais" ADD COLUMN "fatura_id__uid" UUID;
+UPDATE "notas_fiscais" f SET "fatura_id__uid" = p."uid" FROM "faturas" p WHERE f."fatura_id" = p."id";
+ALTER TABLE "chamados" ADD COLUMN "cliente_id__uid" UUID;
+UPDATE "chamados" f SET "cliente_id__uid" = p."uid" FROM "clientes" p WHERE f."cliente_id" = p."id";
+ALTER TABLE "chamados" ADD COLUMN "servico_id__uid" UUID;
+UPDATE "chamados" f SET "servico_id__uid" = p."uid" FROM "servicos" p WHERE f."servico_id" = p."id";
+ALTER TABLE "chamados" ADD COLUMN "responsavel_id__uid" UUID;
+UPDATE "chamados" f SET "responsavel_id__uid" = p."uid" FROM "colaboradores" p WHERE f."responsavel_id" = p."id";
+ALTER TABLE "usuarios" ADD COLUMN "perfil_id__uid" UUID;
+UPDATE "usuarios" f SET "perfil_id__uid" = p."uid" FROM "perfis" p WHERE f."perfil_id" = p."id";
+ALTER TABLE "usuarios" ADD COLUMN "colaborador_id__uid" UUID;
+UPDATE "usuarios" f SET "colaborador_id__uid" = p."uid" FROM "colaboradores" p WHERE f."colaborador_id" = p."id";
+ALTER TABLE "sessoes" ADD COLUMN "usuario_id__uid" UUID;
+UPDATE "sessoes" f SET "usuario_id__uid" = p."uid" FROM "usuarios" p WHERE f."usuario_id" = p."id";
+ALTER TABLE "atividades" ADD COLUMN "usuario_id__uid" UUID;
+UPDATE "atividades" f SET "usuario_id__uid" = p."uid" FROM "usuarios" p WHERE f."usuario_id" = p."id";
+
+-- 3. Perfil padrão guardado nas configurações (era o id numérico)
+UPDATE "configuracoes" c SET "valor" = to_jsonb(p."uid"::text)
+  FROM "perfis" p WHERE c."chave" = 'perfilPadraoId' AND c."valor" = to_jsonb(p."id");
+UPDATE "configuracoes" SET "valor" = 'null'::jsonb
+  WHERE "chave" = 'perfilPadraoId' AND jsonb_typeof("valor") = 'number';
+
+-- 4. Sai a coluna antiga de cada FK (leva junto constraint e índices)
+ALTER TABLE "colaboradores" DROP COLUMN "cargo_id" CASCADE;
+ALTER TABLE "ferias" DROP COLUMN "colaborador_id" CASCADE;
+ALTER TABLE "afastamentos" DROP COLUMN "colaborador_id" CASCADE;
+ALTER TABLE "banco_horas" DROP COLUMN "colaborador_id" CASCADE;
+ALTER TABLE "equipamentos" DROP COLUMN "responsavel_id" CASCADE;
+ALTER TABLE "contratos" DROP COLUMN "cliente_id" CASCADE;
+ALTER TABLE "kanban_cards" DROP COLUMN "coluna_id" CASCADE;
+ALTER TABLE "ordens_servico" DROP COLUMN "cliente_id" CASCADE;
+ALTER TABLE "ordens_servico" DROP COLUMN "servico_id" CASCADE;
+ALTER TABLE "ordens_servico" DROP COLUMN "responsavel_id" CASCADE;
+ALTER TABLE "faturas" DROP COLUMN "cliente_id" CASCADE;
+ALTER TABLE "faturas" DROP COLUMN "ordem_id" CASCADE;
+ALTER TABLE "notas_fiscais" DROP COLUMN "cliente_id" CASCADE;
+ALTER TABLE "notas_fiscais" DROP COLUMN "fatura_id" CASCADE;
+ALTER TABLE "chamados" DROP COLUMN "cliente_id" CASCADE;
+ALTER TABLE "chamados" DROP COLUMN "servico_id" CASCADE;
+ALTER TABLE "chamados" DROP COLUMN "responsavel_id" CASCADE;
+ALTER TABLE "usuarios" DROP COLUMN "perfil_id" CASCADE;
+ALTER TABLE "usuarios" DROP COLUMN "colaborador_id" CASCADE;
+ALTER TABLE "sessoes" DROP COLUMN "usuario_id" CASCADE;
+ALTER TABLE "atividades" DROP COLUMN "usuario_id" CASCADE;
+
+-- 5. Sai o id inteiro (e sua sequência); o UUID vira a chave primária
+ALTER TABLE "clientes" DROP COLUMN "id" CASCADE;
+ALTER TABLE "clientes" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "clientes" ADD CONSTRAINT "clientes_pkey" PRIMARY KEY ("id");
+ALTER TABLE "cargos" DROP COLUMN "id" CASCADE;
+ALTER TABLE "cargos" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "cargos" ADD CONSTRAINT "cargos_pkey" PRIMARY KEY ("id");
+ALTER TABLE "colaboradores" DROP COLUMN "id" CASCADE;
+ALTER TABLE "colaboradores" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "colaboradores" ADD CONSTRAINT "colaboradores_pkey" PRIMARY KEY ("id");
+ALTER TABLE "servicos" DROP COLUMN "id" CASCADE;
+ALTER TABLE "servicos" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "servicos" ADD CONSTRAINT "servicos_pkey" PRIMARY KEY ("id");
+ALTER TABLE "ferias" DROP COLUMN "id" CASCADE;
+ALTER TABLE "ferias" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "ferias" ADD CONSTRAINT "ferias_pkey" PRIMARY KEY ("id");
+ALTER TABLE "afastamentos" DROP COLUMN "id" CASCADE;
+ALTER TABLE "afastamentos" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "afastamentos" ADD CONSTRAINT "afastamentos_pkey" PRIMARY KEY ("id");
+ALTER TABLE "banco_horas" DROP COLUMN "id" CASCADE;
+ALTER TABLE "banco_horas" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "banco_horas" ADD CONSTRAINT "banco_horas_pkey" PRIMARY KEY ("id");
+ALTER TABLE "equipamentos" DROP COLUMN "id" CASCADE;
+ALTER TABLE "equipamentos" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "equipamentos" ADD CONSTRAINT "equipamentos_pkey" PRIMARY KEY ("id");
+ALTER TABLE "contratacoes" DROP COLUMN "id" CASCADE;
+ALTER TABLE "contratacoes" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "contratacoes" ADD CONSTRAINT "contratacoes_pkey" PRIMARY KEY ("id");
+ALTER TABLE "contratos" DROP COLUMN "id" CASCADE;
+ALTER TABLE "contratos" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "contratos" ADD CONSTRAINT "contratos_pkey" PRIMARY KEY ("id");
+ALTER TABLE "kanban_colunas" DROP COLUMN "id" CASCADE;
+ALTER TABLE "kanban_colunas" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "kanban_colunas" ADD CONSTRAINT "kanban_colunas_pkey" PRIMARY KEY ("id");
+ALTER TABLE "kanban_cards" DROP COLUMN "id" CASCADE;
+ALTER TABLE "kanban_cards" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "kanban_cards" ADD CONSTRAINT "kanban_cards_pkey" PRIMARY KEY ("id");
+ALTER TABLE "ordens_servico" DROP COLUMN "id" CASCADE;
+ALTER TABLE "ordens_servico" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "ordens_servico" ADD CONSTRAINT "ordens_servico_pkey" PRIMARY KEY ("id");
+ALTER TABLE "faturas" DROP COLUMN "id" CASCADE;
+ALTER TABLE "faturas" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "faturas" ADD CONSTRAINT "faturas_pkey" PRIMARY KEY ("id");
+ALTER TABLE "notas_fiscais" DROP COLUMN "id" CASCADE;
+ALTER TABLE "notas_fiscais" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "notas_fiscais" ADD CONSTRAINT "notas_fiscais_pkey" PRIMARY KEY ("id");
+ALTER TABLE "chamados" DROP COLUMN "id" CASCADE;
+ALTER TABLE "chamados" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "chamados" ADD CONSTRAINT "chamados_pkey" PRIMARY KEY ("id");
+ALTER TABLE "eventos" DROP COLUMN "id" CASCADE;
+ALTER TABLE "eventos" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "eventos" ADD CONSTRAINT "eventos_pkey" PRIMARY KEY ("id");
+ALTER TABLE "usuarios" DROP COLUMN "id" CASCADE;
+ALTER TABLE "usuarios" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "usuarios" ADD CONSTRAINT "usuarios_pkey" PRIMARY KEY ("id");
+ALTER TABLE "perfis" DROP COLUMN "id" CASCADE;
+ALTER TABLE "perfis" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "perfis" ADD CONSTRAINT "perfis_pkey" PRIMARY KEY ("id");
+ALTER TABLE "atividades" DROP COLUMN "id" CASCADE;
+ALTER TABLE "atividades" RENAME COLUMN "uid" TO "id";
+ALTER TABLE "atividades" ADD CONSTRAINT "atividades_pkey" PRIMARY KEY ("id");
+
+-- 6. FKs com o nome e o comportamento definidos no schema.prisma
+ALTER TABLE "colaboradores" RENAME COLUMN "cargo_id__uid" TO "cargo_id";
+ALTER TABLE "colaboradores" ADD CONSTRAINT "colaboradores_cargo_id_fkey" FOREIGN KEY ("cargo_id") REFERENCES "cargos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "ferias" RENAME COLUMN "colaborador_id__uid" TO "colaborador_id";
+ALTER TABLE "ferias" ALTER COLUMN "colaborador_id" SET NOT NULL;
+ALTER TABLE "ferias" ADD CONSTRAINT "ferias_colaborador_id_fkey" FOREIGN KEY ("colaborador_id") REFERENCES "colaboradores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "afastamentos" RENAME COLUMN "colaborador_id__uid" TO "colaborador_id";
+ALTER TABLE "afastamentos" ALTER COLUMN "colaborador_id" SET NOT NULL;
+ALTER TABLE "afastamentos" ADD CONSTRAINT "afastamentos_colaborador_id_fkey" FOREIGN KEY ("colaborador_id") REFERENCES "colaboradores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "banco_horas" RENAME COLUMN "colaborador_id__uid" TO "colaborador_id";
+ALTER TABLE "banco_horas" ALTER COLUMN "colaborador_id" SET NOT NULL;
+ALTER TABLE "banco_horas" ADD CONSTRAINT "banco_horas_colaborador_id_fkey" FOREIGN KEY ("colaborador_id") REFERENCES "colaboradores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "equipamentos" RENAME COLUMN "responsavel_id__uid" TO "responsavel_id";
+ALTER TABLE "equipamentos" ADD CONSTRAINT "equipamentos_responsavel_id_fkey" FOREIGN KEY ("responsavel_id") REFERENCES "colaboradores"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "contratos" RENAME COLUMN "cliente_id__uid" TO "cliente_id";
+ALTER TABLE "contratos" ALTER COLUMN "cliente_id" SET NOT NULL;
+ALTER TABLE "contratos" ADD CONSTRAINT "contratos_cliente_id_fkey" FOREIGN KEY ("cliente_id") REFERENCES "clientes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "kanban_cards" RENAME COLUMN "coluna_id__uid" TO "coluna_id";
+ALTER TABLE "kanban_cards" ALTER COLUMN "coluna_id" SET NOT NULL;
+ALTER TABLE "kanban_cards" ADD CONSTRAINT "kanban_cards_coluna_id_fkey" FOREIGN KEY ("coluna_id") REFERENCES "kanban_colunas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "ordens_servico" RENAME COLUMN "cliente_id__uid" TO "cliente_id";
+ALTER TABLE "ordens_servico" ALTER COLUMN "cliente_id" SET NOT NULL;
+ALTER TABLE "ordens_servico" ADD CONSTRAINT "ordens_servico_cliente_id_fkey" FOREIGN KEY ("cliente_id") REFERENCES "clientes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "ordens_servico" RENAME COLUMN "servico_id__uid" TO "servico_id";
+ALTER TABLE "ordens_servico" ADD CONSTRAINT "ordens_servico_servico_id_fkey" FOREIGN KEY ("servico_id") REFERENCES "servicos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "ordens_servico" RENAME COLUMN "responsavel_id__uid" TO "responsavel_id";
+ALTER TABLE "ordens_servico" ADD CONSTRAINT "ordens_servico_responsavel_id_fkey" FOREIGN KEY ("responsavel_id") REFERENCES "colaboradores"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "faturas" RENAME COLUMN "cliente_id__uid" TO "cliente_id";
+ALTER TABLE "faturas" ALTER COLUMN "cliente_id" SET NOT NULL;
+ALTER TABLE "faturas" ADD CONSTRAINT "faturas_cliente_id_fkey" FOREIGN KEY ("cliente_id") REFERENCES "clientes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "faturas" RENAME COLUMN "ordem_id__uid" TO "ordem_id";
+ALTER TABLE "faturas" ADD CONSTRAINT "faturas_ordem_id_fkey" FOREIGN KEY ("ordem_id") REFERENCES "ordens_servico"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "notas_fiscais" RENAME COLUMN "cliente_id__uid" TO "cliente_id";
+ALTER TABLE "notas_fiscais" ALTER COLUMN "cliente_id" SET NOT NULL;
+ALTER TABLE "notas_fiscais" ADD CONSTRAINT "notas_fiscais_cliente_id_fkey" FOREIGN KEY ("cliente_id") REFERENCES "clientes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "notas_fiscais" RENAME COLUMN "fatura_id__uid" TO "fatura_id";
+ALTER TABLE "notas_fiscais" ADD CONSTRAINT "notas_fiscais_fatura_id_fkey" FOREIGN KEY ("fatura_id") REFERENCES "faturas"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "chamados" RENAME COLUMN "cliente_id__uid" TO "cliente_id";
+ALTER TABLE "chamados" ALTER COLUMN "cliente_id" SET NOT NULL;
+ALTER TABLE "chamados" ADD CONSTRAINT "chamados_cliente_id_fkey" FOREIGN KEY ("cliente_id") REFERENCES "clientes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "chamados" RENAME COLUMN "servico_id__uid" TO "servico_id";
+ALTER TABLE "chamados" ADD CONSTRAINT "chamados_servico_id_fkey" FOREIGN KEY ("servico_id") REFERENCES "servicos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "chamados" RENAME COLUMN "responsavel_id__uid" TO "responsavel_id";
+ALTER TABLE "chamados" ADD CONSTRAINT "chamados_responsavel_id_fkey" FOREIGN KEY ("responsavel_id") REFERENCES "colaboradores"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "usuarios" RENAME COLUMN "perfil_id__uid" TO "perfil_id";
+ALTER TABLE "usuarios" ADD CONSTRAINT "usuarios_perfil_id_fkey" FOREIGN KEY ("perfil_id") REFERENCES "perfis"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "usuarios" RENAME COLUMN "colaborador_id__uid" TO "colaborador_id";
+ALTER TABLE "usuarios" ADD CONSTRAINT "usuarios_colaborador_id_fkey" FOREIGN KEY ("colaborador_id") REFERENCES "colaboradores"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "sessoes" RENAME COLUMN "usuario_id__uid" TO "usuario_id";
+ALTER TABLE "sessoes" ALTER COLUMN "usuario_id" SET NOT NULL;
+ALTER TABLE "sessoes" ADD CONSTRAINT "sessoes_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "usuarios"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "atividades" RENAME COLUMN "usuario_id__uid" TO "usuario_id";
+ALTER TABLE "atividades" ADD CONSTRAINT "atividades_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "usuarios"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- 7. Índices recriados
+CREATE INDEX "colaboradores_cargo_id_idx" ON "colaboradores"("cargo_id");
+CREATE INDEX "ferias_colaborador_id_idx" ON "ferias"("colaborador_id");
+CREATE INDEX "afastamentos_colaborador_id_idx" ON "afastamentos"("colaborador_id");
+CREATE UNIQUE INDEX "banco_horas_colaborador_id_competencia_key" ON "banco_horas"("colaborador_id", "competencia");
+CREATE INDEX "equipamentos_responsavel_id_idx" ON "equipamentos"("responsavel_id");
+CREATE INDEX "contratos_cliente_id_idx" ON "contratos"("cliente_id");
+CREATE INDEX "kanban_cards_coluna_id_ordem_idx" ON "kanban_cards"("coluna_id", "ordem");
+CREATE INDEX "ordens_servico_cliente_id_idx" ON "ordens_servico"("cliente_id");
+CREATE INDEX "ordens_servico_responsavel_id_idx" ON "ordens_servico"("responsavel_id");
+CREATE INDEX "faturas_cliente_id_idx" ON "faturas"("cliente_id");
+CREATE INDEX "notas_fiscais_cliente_id_idx" ON "notas_fiscais"("cliente_id");
+CREATE INDEX "chamados_responsavel_id_idx" ON "chamados"("responsavel_id");
+CREATE INDEX "usuarios_perfil_id_idx" ON "usuarios"("perfil_id");
+CREATE UNIQUE INDEX "usuarios_colaborador_id_key" ON "usuarios"("colaborador_id");
+CREATE INDEX "sessoes_usuario_id_idx" ON "sessoes"("usuario_id");
+
+COMMIT;

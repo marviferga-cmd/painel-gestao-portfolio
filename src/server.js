@@ -4,7 +4,7 @@ import express from "express";
 import helmet from "helmet";
 import compression from "compression";
 import { prisma } from "./db.js";
-import { api } from "./routes.js";
+import { api } from "./routes/index.js";
 import { carregarUsuario, garantirAdmin } from "./auth.js";
 import { limparHistorico } from "./config.js";
 

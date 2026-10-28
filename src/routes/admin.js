@@ -7,23 +7,18 @@
    ========================================================= */
 import { randomBytes } from "node:crypto";
 import { Router } from "express";
-import { prisma } from "./db.js";
-import { ValidationError } from "./lib/format.js";
-import { lerConfig, registrar, salvarConfig } from "./config.js";
-import { converter, importar, lerCSV } from "../prisma/importar-colaboradores.js";
+import { prisma } from "../db.js";
+import { ValidationError } from "../lib/format.js";
+import { idParam, uuidOuNull } from "../lib/http.js";
+import { lerConfig, registrar, salvarConfig } from "../config.js";
+import { converter, importar, lerCSV } from "../../prisma/importar-colaboradores.js";
 import {
   exigirAdmin, gerarLink, hashSenha, normEmail, sanitizarAcessos,
   TELAS, usuarioPublico, validaSenha,
-} from "./auth.js";
+} from "../auth.js";
 
 export const adminApi = Router();
 adminApi.use(exigirAdmin);
-
-function idParam(req) {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) throw new ValidationError("id inválido");
-  return id;
-}
 
 const STATUS = ["convidado", "pendente", "ativo", "bloqueado"];
 
@@ -39,13 +34,13 @@ async function dadosDeAcesso(body, usuarioId = null) {
     data.papel = body.papel;
   }
   if (body.perfilId !== undefined) {
-    const id = body.perfilId === null || body.perfilId === "" ? null : Number(body.perfilId);
+    const id = uuidOuNull(body.perfilId, "Perfil");
     if (id !== null && !(await prisma.perfil.findUnique({ where: { id } }))) throw new ValidationError("Perfil inválido");
     data.perfilId = id;
   }
   if (body.acessos !== undefined) data.acessos = sanitizarAcessos(body.acessos);
   if (body.colaboradorId !== undefined) {
-    const id = body.colaboradorId === null || body.colaboradorId === "" ? null : Number(body.colaboradorId);
+    const id = uuidOuNull(body.colaboradorId, "Colaborador");
     if (id !== null) {
       if (!(await prisma.colaborador.findUnique({ where: { id } }))) throw new ValidationError("Colaborador inválido");
       const dono = await prisma.usuario.findUnique({ where: { colaboradorId: id } });
@@ -235,13 +230,14 @@ adminApi.put("/config", async (req, res) => {
 
 /* ---------------- histórico ---------------- */
 adminApi.get("/atividades", async (req, res) => {
+  // paginação por data: "antes" é o createdAt do último item já carregado
   const where = {};
-  const antes = Number(req.query.antes);
-  if (Number.isInteger(antes) && antes > 0) where.id = { lt: antes };
-  if (req.query.usuario) where.usuarioId = Number(req.query.usuario) || -1;
+  const antes = new Date(String(req.query.antes ?? ""));
+  if (req.query.antes && !Number.isNaN(antes.getTime())) where.createdAt = { lt: antes };
+  if (req.query.usuario) where.usuarioId = uuidOuNull(req.query.usuario, "Usuário");
   if (req.query.tela) where.tela = String(req.query.tela);
   const itens = await prisma.atividade.findMany({
-    where, orderBy: { id: "desc" }, take: 100,
+    where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100,
     include: { usuario: { select: { nome: true } } },
   });
   res.json(itens.map((a) => ({

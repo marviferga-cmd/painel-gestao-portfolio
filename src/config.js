@@ -6,6 +6,7 @@
    ========================================================= */
 import { prisma } from "./db.js";
 import { ValidationError } from "./lib/format.js";
+import { uuidOuNull } from "./lib/http.js";
 
 export const CORES = ["indigo", "azul", "verde", "violeta", "laranja", "rosa"];
 
@@ -53,7 +54,7 @@ export async function salvarConfig(body) {
   }
   if (body.cadastroAberto !== undefined) novo.cadastroAberto = body.cadastroAberto === true;
   if (body.perfilPadraoId !== undefined) {
-    const id = body.perfilPadraoId === null || body.perfilPadraoId === "" ? null : Number(body.perfilPadraoId);
+    const id = uuidOuNull(body.perfilPadraoId, "Perfil padrão");
     if (id !== null && !(await prisma.perfil.findUnique({ where: { id } }))) throw new ValidationError("Perfil padrão inválido");
     novo.perfilPadraoId = id;
   }

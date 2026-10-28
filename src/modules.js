@@ -356,9 +356,9 @@ export const MODULES = [
       });
       const porResp = new Map();
       for (const c of abertos) {
-        const id = c.responsavelId ?? 0;
+        const id = c.responsavelId ?? "sem-responsavel";
         if (!porResp.has(id)) {
-          porResp.set(id, { id, responsavel: c.responsavel?.nome ?? "(sem responsável)", ativos: 0, noPrazo: 0, emRisco: 0, atrasados: 0 });
+          porResp.set(id, { id: String(id), responsavel: c.responsavel?.nome ?? "(sem responsável)", ativos: 0, noPrazo: 0, emRisco: 0, atrasados: 0 });
         }
         const r = porResp.get(id);
         const s = slaStatus(c);

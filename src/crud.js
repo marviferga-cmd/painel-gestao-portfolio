@@ -1,4 +1,5 @@
 /* CRUD genérico dirigido pelas definições de src/modules.js */
+import { uuidOuNull } from "./lib/http.js";
 import {
   formatHours, monthLabel, parseDate, parseDateTime, parseHours, parseInteger,
   parseMoney, parseMonth, toDateString, toMonthString, ValidationError,
@@ -50,7 +51,7 @@ export function fromInput(mod, body, { partial = false } = {}) {
       case "datetime": val = parseDateTime(raw, col.label); break;
       case "month": val = parseMonth(raw, col.label); break;
       case "hours": val = parseHours(raw, col.label); break;
-      case "ref": val = parseInteger(raw, col.label); break;
+      case "ref": val = uuidOuNull(raw, col.label); break;
       case "bool": val = raw === true || raw === "true" || raw === 1 || raw === "1"; break;
       default: {
         const s = raw === null || raw === undefined ? "" : String(raw).trim();
@@ -120,5 +121,5 @@ export const LOOKUPS = {
   ordens: (p) => p.ordemServico.findMany({ orderBy: { numero: "desc" }, take: 500, include: { cliente: { select: { nome: true } } } })
     .then((r) => r.map((x) => ({ value: x.id, label: `${x.numero} · ${x.cliente.nome}` }))),
   faturas: (p) => p.fatura.findMany({ orderBy: { vencimento: "desc" }, take: 500, include: { cliente: { select: { nome: true } } } })
-    .then((r) => r.map((x) => ({ value: x.id, label: `#${x.id} · ${x.cliente.nome} · R$ ${Number(x.valor).toFixed(2)}` }))),
+    .then((r) => r.map((x) => ({ value: x.id, label: `${x.cliente.nome} · venc. ${x.vencimento.toISOString().slice(0, 10).split("-").reverse().join("/")} · R$ ${Number(x.valor).toFixed(2)}` }))),
 };

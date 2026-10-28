@@ -27,7 +27,7 @@ datasource db {
 // ---------------------------------------------------------------
 
 model Cliente {
-  id        Int      @id @default(autoincrement())
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nome      String   @unique
   documento String?  // CNPJ/CPF
   contato   String?
@@ -44,7 +44,7 @@ model Cliente {
 }
 
 model Cargo {
-  id          Int      @id @default(autoincrement())
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nome         String
   nivel        String
   servico      String? // serviço do contrato a que o cargo pertence
@@ -62,12 +62,12 @@ model Cargo {
 }
 
 model Colaborador {
-  id              Int      @id @default(autoincrement())
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nome            String
   email           String?  @unique
   matricula       String?  @unique
   login           String?  @unique // login de rede
-  cargoId         Int?     @map("cargo_id")
+  cargoId         String? @db.Uuid @map("cargo_id")
   funcao          String?
   setor           String? // lotação
   ramal           String?
@@ -96,7 +96,7 @@ model Colaborador {
 }
 
 model Servico {
-  id        Int      @id @default(autoincrement())
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nome      String   @unique
   categoria String
   slaHoras  Int      @map("sla_horas")
@@ -116,8 +116,8 @@ model Servico {
 // ---------------------------------------------------------------
 
 model Ferias {
-  id            Int      @id @default(autoincrement())
-  colaboradorId Int      @map("colaborador_id")
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  colaboradorId String @db.Uuid @map("colaborador_id")
   inicio        DateTime @db.Date
   fim           DateTime @db.Date
   status        String   @default("Pendente")
@@ -133,8 +133,8 @@ model Ferias {
 }
 
 model Afastamento {
-  id            Int       @id @default(autoincrement())
-  colaboradorId Int       @map("colaborador_id")
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  colaboradorId String @db.Uuid @map("colaborador_id")
   tipo          String
   inicio        DateTime  @db.Date
   fim           DateTime? @db.Date
@@ -149,8 +149,8 @@ model Afastamento {
 }
 
 model BancoHoras {
-  id               Int      @id @default(autoincrement())
-  colaboradorId    Int      @map("colaborador_id")
+  id               String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  colaboradorId    String @db.Uuid @map("colaborador_id")
   competencia      DateTime @db.Date // sempre o dia 1 do mês de referência
   saldoAnteriorMin Int      @default(0) @map("saldo_anterior_min")
   movimentacaoMin  Int      @default(0) @map("movimentacao_min")
@@ -164,10 +164,10 @@ model BancoHoras {
 }
 
 model Equipamento {
-  id            Int       @id @default(autoincrement())
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   descricao     String
   patrimonio    String    @unique
-  responsavelId Int?      @map("responsavel_id")
+  responsavelId String? @db.Uuid @map("responsavel_id")
   entrega       DateTime? @db.Date
   devolucao     DateTime? @db.Date
   status        String    @default("Disponível")
@@ -181,7 +181,7 @@ model Equipamento {
 }
 
 model Contratacao {
-  id        Int       @id @default(autoincrement())
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   candidato String
   vaga      String
   etapa     String
@@ -194,9 +194,9 @@ model Contratacao {
 }
 
 model Contrato {
-  id          Int       @id @default(autoincrement())
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   numero      String    @unique
-  clienteId   Int       @map("cliente_id")
+  clienteId   String @db.Uuid @map("cliente_id")
   escopo      String
   vigenciaFim DateTime  @map("vigencia_fim") @db.Date
   status      String    @default("Em execução")
@@ -211,7 +211,7 @@ model Contrato {
 
 // Kanban genérico: um "quadro" (ex.: "pessoas") com colunas e cards ordenados.
 model KanbanColuna {
-  id     Int    @id @default(autoincrement())
+  id     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   quadro String
   titulo String
   ordem  Int
@@ -223,8 +223,8 @@ model KanbanColuna {
 }
 
 model KanbanCard {
-  id        Int      @id @default(autoincrement())
-  colunaId  Int      @map("coluna_id")
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  colunaId  String @db.Uuid @map("coluna_id")
   titulo    String
   etiqueta  String?
   ordem     Int      @default(0)
@@ -242,11 +242,11 @@ model KanbanCard {
 // ---------------------------------------------------------------
 
 model OrdemServico {
-  id            Int       @id @default(autoincrement())
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   numero        String    @unique
-  clienteId     Int       @map("cliente_id")
-  servicoId     Int?      @map("servico_id")
-  responsavelId Int?      @map("responsavel_id")
+  clienteId     String @db.Uuid @map("cliente_id")
+  servicoId     String? @db.Uuid @map("servico_id")
+  responsavelId String? @db.Uuid @map("responsavel_id")
   descricao     String?
   prazo         DateTime  @db.Date
   status        String    @default("Aberta")
@@ -266,9 +266,9 @@ model OrdemServico {
 }
 
 model Fatura {
-  id         Int       @id @default(autoincrement())
-  clienteId  Int       @map("cliente_id")
-  ordemId    Int?      @map("ordem_id")
+  id         String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clienteId  String @db.Uuid @map("cliente_id")
+  ordemId    String? @db.Uuid @map("ordem_id")
   referencia String?
   valor      Decimal   @db.Decimal(12, 2)
   vencimento DateTime  @db.Date
@@ -287,10 +287,10 @@ model Fatura {
 }
 
 model NotaFiscal {
-  id        Int      @id @default(autoincrement())
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   numero    String   @unique
-  clienteId Int      @map("cliente_id")
-  faturaId  Int?     @map("fatura_id")
+  clienteId String @db.Uuid @map("cliente_id")
+  faturaId  String? @db.Uuid @map("fatura_id")
   valor     Decimal  @db.Decimal(12, 2)
   emissao   DateTime @db.Date
   status    String   @default("Emitida")
@@ -311,11 +311,11 @@ model NotaFiscal {
 // O risco (No prazo / Atenção / Crítico / Atrasado) e o tempo restante são
 // calculados a partir de prazoEm e concluidoEm — nunca digitados.
 model Chamado {
-  id            Int       @id @default(autoincrement())
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   codigo        String    @unique
-  clienteId     Int       @map("cliente_id")
-  servicoId     Int?      @map("servico_id")
-  responsavelId Int?      @map("responsavel_id")
+  clienteId     String @db.Uuid @map("cliente_id")
+  servicoId     String? @db.Uuid @map("servico_id")
+  responsavelId String? @db.Uuid @map("responsavel_id")
   descricao     String?
   abertoEm      DateTime  @default(now()) @map("aberto_em")
   prazoEm       DateTime  @map("prazo_em")
@@ -338,7 +338,7 @@ model Chamado {
 // ---------------------------------------------------------------
 
 model Evento {
-  id        Int      @id @default(autoincrement())
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   titulo    String
   inicio    DateTime
   modulo    String?  // pessoas | os | sla (opcional, para colorir)
@@ -353,7 +353,7 @@ model Evento {
 // ---------------------------------------------------------------
 
 model Usuario {
-  id            Int       @id @default(autoincrement())
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nome          String
   email         String    @unique // sempre minúsculo
   senhaHash     String    @map("senha_hash") // scrypt: salt:hash (hex)
@@ -361,9 +361,9 @@ model Usuario {
   status        String    @default("pendente") // convidado | pendente | ativo | bloqueado
   // Acesso por tela: se tiver perfil, vale o do perfil; senão, vale `acessos`.
   // Formato: { "chave-da-tela": "ver" | "editar" } (tela ausente = sem acesso)
-  perfilId      Int?      @map("perfil_id")
+  perfilId      String? @db.Uuid @map("perfil_id")
   acessos       Json      @default("{}")
-  colaboradorId Int?      @unique @map("colaborador_id")
+  colaboradorId String? @unique @db.Uuid @map("colaborador_id")
   // Link de convite / redefinição de senha: só o SHA-256 do token fica no banco
   conviteHash   String?   @unique @map("convite_hash")
   conviteExpira DateTime? @map("convite_expira")
@@ -382,7 +382,7 @@ model Usuario {
 
 // Modelo de acesso reutilizável (ex.: "RH", "Financeiro").
 model Perfil {
-  id        Int      @id @default(autoincrement())
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nome      String   @unique
   descricao String?
   acessos   Json     @default("{}") // mesmo formato de Usuario.acessos
@@ -396,7 +396,7 @@ model Perfil {
 
 model Sessao {
   id        String   @id // SHA-256 do token do cookie (o token em si não é guardado)
-  usuarioId Int      @map("usuario_id")
+  usuarioId String @db.Uuid @map("usuario_id")
   expiraEm  DateTime @map("expira_em")
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -417,8 +417,8 @@ model Configuracao {
 
 // Histórico de quem criou/alterou/excluiu o quê.
 model Atividade {
-  id        Int      @id @default(autoincrement())
-  usuarioId Int?     @map("usuario_id")
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuarioId String? @db.Uuid @map("usuario_id")
   acao      String // criou | alterou | excluiu | moveu | admin
   tela      String? // chave do módulo
   descricao String
