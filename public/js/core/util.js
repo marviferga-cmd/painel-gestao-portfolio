@@ -88,21 +88,6 @@ async function copyText(text){
   catch { window.prompt("Copie o texto abaixo:", text); return false; }
 }
 
-/* baixa um CSV que o Excel em português abre direto (BOM + ponto e vírgula) */
-function downloadCSV(filename, header, rows){
-  const cell = v => {
-    const s = String(v ?? "");
-    return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const csv = "﻿" + [header, ...rows].map(r => r.map(cell).join(";")).join("\r\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-}
-
 function timeAgo(iso){
   if (!iso) return "—";
   const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -113,4 +98,16 @@ function timeAgo(iso){
   const d = Math.round(h / 24);
   if (d < 30) return `há ${d} dia${d > 1 ? "s" : ""}`;
   return fmtDateTime(iso);
+}
+
+/* Mantém o Tab dentro do diálogo aberto. */
+function trapFocus(e, root){
+  if (!root) return;
+  const items = [...root.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter(el => !el.disabled && el.offsetParent !== null);
+  if (!items.length) return;
+  const first = items[0], last = items[items.length - 1];
+  if (!root.contains(document.activeElement)){ e.preventDefault(); first.focus(); }
+  else if (e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
 }

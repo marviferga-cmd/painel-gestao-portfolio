@@ -49,10 +49,12 @@ painel-gestao/
 │   ├── index.html · login.html · convite.html
 │   ├── css/style.css               → tema claro/escuro e cores de destaque
 │   └── js/
-│       ├── core/                   → ícones, utilitários, cliente da API, tema
+│       ├── core/                   → ícones, utilitários, cliente da API, tema, exportação PDF/Excel
 │       ├── views/                  → uma tela por arquivo (home, tabela, kanban, agenda, sla, relatórios, admin)
 │       └── app.js                  → menu, rotas, busca Ctrl+K, modais e confirmações
-├── scripts/check.js                → verificação de sintaxe de todo o JS (npm run check)
+├── test/                           → testes unitários (npm test, sem banco)
+├── scripts/                        → check.js (sintaxe) e smoke.js (teste da API rodando)
+├── .github/workflows/ci.yml        → CI: testes, migrações num Postgres limpo e smoke test
 ├── Dockerfile · docker-compose.yml · railway.json · render.yaml
 └── .env.example
 ```
@@ -64,7 +66,7 @@ Para **adicionar uma coluna** a uma tela: inclua o campo no `schema.prisma`, rod
 ## Recursos da interface
 
 - **Visão geral**: indicadores de pessoas, cobertura do contrato, férias, afastamentos, OS, SLA e financeiro, além de uma lista "Precisa de atenção" e dos próximos eventos. Cada bloco só aparece para quem pode ver a tela de origem.
-- **Tabelas**: busca, filtros, ordenação por coluna (clique no cabeçalho), paginação (25/50/100), cabeçalho fixo, exportação CSV e duplo clique na linha para editar.
+- **Tabelas**: busca, filtros, ordenação por coluna (clique no cabeçalho), paginação (25/50/100), cabeçalho fixo e duplo clique na linha para editar.
 - **Busca rápida**: `Ctrl+K` (ou `⌘K`) abre a busca de telas de qualquer lugar.
 - **Menu lateral** com grupos recolhíveis (a escolha fica salva no navegador) e trilha de navegação no topo.
 - **Confirmações** próprias para ações destrutivas, tema claro/escuro e 6 cores de destaque.
@@ -89,6 +91,18 @@ Sem Postgres instalado? Suba tudo com Docker:
 docker compose up -d --build
 docker compose exec app npm run db:seed   # opcional
 ```
+
+## Testes
+
+```bash
+npm run check        # sintaxe de todos os .js
+npm test             # regras de negócio (format.js, beforeSave, validações) — não precisa de banco
+npm run test:smoke   # com o servidor rodando e o seed aplicado: login, todas as telas, CRUD, histórico, Kanban, sessões
+```
+
+O smoke test usa `ADMIN_EMAIL`/`ADMIN_PASSWORD` do `.env` e cria/apaga registros de teste. Não rode em produção.
+
+A cada push, o GitHub Actions roda tudo isso num PostgreSQL limpo e ainda confere se as migrações batem com o `schema.prisma`.
 
 ## Deploy
 
@@ -183,7 +197,15 @@ Telas calculadas (relatórios, indicadores, dashboards) só aceitam *Ver*. Admin
 
 **Outros recursos.** Bloquear (desconecta na hora), gerar link de nova senha, promover administrador (o sistema nunca fica sem um admin ativo), histórico de quem criou/alterou/excluiu cada registro e configurações de nome, subtítulo e cor de destaque do painel.
 
-**Segurança.** Senhas com scrypt; sessão em cookie `HttpOnly` de 7 dias; no banco ficam só os hashes SHA-256 dos tokens de sessão e de convite; limite de tentativas por IP; trocar a senha desconecta os outros dispositivos.
+**Segurança.** Senhas com scrypt; sessão em cookie `HttpOnly` de 7 dias; no banco ficam só os hashes SHA-256 dos tokens de sessão e de convite; limite de tentativas por IP guardado no banco (vale entre reinícios e com mais de uma instância; no login só contam as senhas erradas); trocar a senha desconecta os outros dispositivos.
+
+**Tabelas.** Clique no cabeçalho para ordenar (crescente → decrescente → original). Cada tela carrega até 2000 registros; acima disso, a contagem avisa.
+
+**Exportar (PDF ou Excel).** O botão *Exportar*, no topo, aparece em toda tela com dados (cadastros, Kanban, relatórios, indicadores, SLA, agenda, usuários, perfis e histórico) e baixa exatamente o que está na tela, com filtros e ordenação:
+- **PDF** — cabeçalho com o painel e a seção, filtros aplicados, indicadores-resumo e a tabela, paginado (A4, deitado quando há muitas colunas).
+- **Excel (.xlsx)** — mesmos dados, com dinheiro, números e datas como valores de verdade (dá para somar e filtrar), cabeçalho congelado e filtro automático.
+
+Os arquivos são gerados no navegador (jsPDF e ExcelJS, servidos pelo próprio painel em `/vendor`, carregados só no primeiro uso). 
 
 ## Regras de SLA
 

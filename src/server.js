@@ -50,6 +50,20 @@ app.use("/api", express.json({ limit: "2mb" }), api);
 
 /* HTML, JS e CSS sempre revalidam (ETag → 304 barato): depois de um deploy o
    navegador não mistura HTML novo com script antigo. Fontes/imagens podem ficar em cache. */
+/* Bibliotecas de exportação (PDF/Excel) servidas do node_modules: mesma origem, então a CSP
+   continua só com 'self'. Lista fixa: nada mais do node_modules fica exposto. */
+const VENDOR = {
+  "jspdf.js": "jspdf/dist/jspdf.umd.min.js",
+  "jspdf-autotable.js": "jspdf-autotable/dist/jspdf.plugin.autotable.min.js",
+  "exceljs.js": "exceljs/dist/exceljs.min.js",
+};
+app.get("/vendor/:arquivo", (req, res, next) => {
+  const rel = VENDOR[req.params.arquivo];
+  if (!rel) return next();
+  // `root`: o sendFile recusa caminhos com pasta iniciada por ponto (ex.: projeto dentro de ~/.vscode)
+  res.sendFile(rel, { root: path.join(__dirname, "..", "node_modules"), maxAge: isProd ? "7d" : 0 });
+});
+
 app.use(express.static(path.join(__dirname, "..", "public"), {
   maxAge: isProd ? "1h" : 0,
   setHeaders(res, file) {

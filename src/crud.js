@@ -1,11 +1,12 @@
 /* CRUD genérico dirigido pelas definições de src/modules.js */
-import { uuidOuNull } from "./lib/http.js";
+import { rotuloFatura } from "./modules.js";
 import {
   formatHours, monthLabel, parseDate, parseDateTime, parseHours, parseInteger,
   parseMoney, parseMonth, toDateString, toMonthString, ValidationError,
 } from "./lib/format.js";
+import { httpError, uuidOuNull } from "./lib/http.js";
 
-const MAX_ROWS = 2000;
+export const MAX_ROWS = 2000;
 
 /* ---------- banco -> linha da tabela ---------- */
 export function toRow(mod, rec) {
@@ -81,7 +82,7 @@ export async function listRows(prisma, mod) {
 
 async function fetchOne(prisma, mod, id) {
   const rec = await prisma[mod.model].findUnique({ where: { id }, include: mod.include });
-  if (!rec) { const e = new Error("Registro não encontrado"); e.status = 404; throw e; }
+  if (!rec) throw httpError(404, "Registro não encontrado");
   return rec;
 }
 
@@ -121,5 +122,5 @@ export const LOOKUPS = {
   ordens: (p) => p.ordemServico.findMany({ orderBy: { numero: "desc" }, take: 500, include: { cliente: { select: { nome: true } } } })
     .then((r) => r.map((x) => ({ value: x.id, label: `${x.numero} · ${x.cliente.nome}` }))),
   faturas: (p) => p.fatura.findMany({ orderBy: { vencimento: "desc" }, take: 500, include: { cliente: { select: { nome: true } } } })
-    .then((r) => r.map((x) => ({ value: x.id, label: `${x.cliente.nome} · venc. ${x.vencimento.toISOString().slice(0, 10).split("-").reverse().join("/")} · R$ ${Number(x.valor).toFixed(2)}` }))),
+    .then((r) => r.map((x) => ({ value: x.id, label: rotuloFatura(x) }))),
 };

@@ -15,6 +15,7 @@ function getMondayOfWeek(date){
 }
 
 async function renderWeekView(container, item){
+  const tela = App.currentKey;
   const monday = getMondayOfWeek(App.weekAnchor);
   const nextMonday = new Date(monday); nextMonday.setDate(monday.getDate() + 7);
 
@@ -67,6 +68,22 @@ async function renderWeekView(container, item){
   `;
 
   const reload = () => renderWeekView(container, item);
+
+  App.setExport(tela, () => ({
+    titulo: item.label,
+    subtitulo: `Semana de ${fmt(monday)} a ${fmt(sunday)}/${sunday.getFullYear()}`,
+    colunas: [
+      { label: "Data", type: "date" }, { label: "Dia", type: "text" }, { label: "Horário", type: "text" },
+      { label: "Descrição", type: "text" }, { label: "Módulo", type: "text" },
+    ],
+    linhas: events.map(ev => {
+      const t = new Date(ev.inicio);
+      return [
+        t.toLocaleDateString("en-CA"), t.toLocaleDateString("pt-BR", { weekday: "long" }),
+        t.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }), ev.titulo, MODULO_LABEL[ev.modulo] || "Geral",
+      ];
+    }),
+  }));
   container.querySelector("#weekPrev").addEventListener("click", () => { App.weekAnchor.setDate(App.weekAnchor.getDate() - 7); reload(); });
   container.querySelector("#weekNext").addEventListener("click", () => { App.weekAnchor.setDate(App.weekAnchor.getDate() + 7); reload(); });
   container.querySelector("#weekToday").addEventListener("click", () => { App.weekAnchor = new Date(); reload(); });

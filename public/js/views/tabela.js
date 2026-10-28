@@ -41,6 +41,17 @@ function sortValue(col, row){
   }
 }
 
+/* Coluna da tabela -> exportação: números, dinheiro e datas vão crus (o Excel calcula e ordena);
+   o resto vai como o texto exibido. */
+function exportCol(col){
+  return { label: col.label, type: { number: "number", money: "money", date: "date", datetime: "datetime" }[col.type] || "text" };
+}
+function exportValue(col, row){
+  if (["number", "money", "date", "datetime"].includes(col.type)) return row[col.key] ?? null;
+  const t = cellText(col, row);
+  return t === "—" ? null : t;
+}
+
 function accentForKind(kind){
   return { ok:"green", warn:"amber", bad:"red", info:"blue" }[kind] || "";
 }
@@ -73,6 +84,7 @@ const tableState = {};
 const PAGE_SIZES = [25, 50, 100];
 
 async function renderTableView(container, item){
+  const tela = App.currentKey;
   container.innerHTML = loadingHTML();
   let rows;
   try { rows = await API.get(`/modules/${item.key}`); }
@@ -99,7 +111,6 @@ async function renderTableView(container, item){
         <div class="panel-actions">
           ${item.key === "colaboradores" && App.meta.user?.papel === "admin"
             ? `<button class="btn btn-ghost" id="importBtn" title="Criar ou atualizar colaboradores a partir de uma planilha">${iconSVG("upload")}Importar</button>` : ""}
-          <button class="btn btn-ghost" id="exportBtn" title="Baixar as linhas filtradas em CSV (abre no Excel)">${iconSVG("download")}Exportar</button>
           ${editable
             ? `<button class="btn btn-primary" id="addRowBtn">${iconSVG("plus")}Adicionar</button>`
             : `<span class="readonly-note">${item.readOnly ? "Calculado automaticamente" : "Somente consulta"}</span>`}
@@ -204,9 +215,11 @@ async function renderTableView(container, item){
           <span>${nFiltros ? "Ajuste a busca ou limpe os filtros." : editable ? "Clique em Adicionar para criar o primeiro." : "Ainda não há registros."}</span>
         </div></td></tr>`;
 
-    container.querySelector("#rowCountLabel").textContent = nFiltros
+    const limite = App.meta.maxRows && rows.length >= App.meta.maxRows
+      ? ` · mostrando só os ${App.meta.maxRows} primeiros; use os filtros ou exporte por partes` : "";
+    container.querySelector("#rowCountLabel").textContent = (nFiltros
       ? `${filtered.length} de ${rows.length} registro(s) · ${nFiltros} filtro(s) ativo(s)`
-      : `${rows.length} registro(s)`;
+      : `${rows.length} registro(s)`) + limite;
 
     const pager = container.querySelector("#pager");
     pager.hidden = filtered.length <= PAGE_SIZES[0];
@@ -244,8 +257,9 @@ async function renderTableView(container, item){
 
   container.querySelectorAll("th.sortable").forEach(th => {
     const toggle = () => {
-      if (st.sort === th.dataset.sort) st.dir = -st.dir;
-      else { st.sort = th.dataset.sort; st.dir = 1; }
+      if (st.sort !== th.dataset.sort){ st.sort = th.dataset.sort; st.dir = 1; }
+      else if (st.dir === 1) st.dir = -1;
+      else st.sort = null;
       draw();
     };
     th.addEventListener("click", toggle);
@@ -265,9 +279,29 @@ async function renderTableView(container, item){
     draw();
   });
 
-  container.querySelector("#exportBtn").addEventListener("click", () => {
-    const hoje = new Date().toISOString().slice(0, 10);
-    downloadCSV(`${item.key}-${hoje}.csv`, visible.map(c => c.label), filtered.map(row => visible.map(c => cellText(c, row))));
+  // exporta o que está na tela: filtros e ordenação aplicados (todas as páginas)
+  App.setExport(tela, () => {
+    const filtros = [
+      st.search.trim() && `Busca: "${st.search.trim()}"`,
+      ...Object.entries(st.filters).filter(([, v]) => v).map(([k, v]) => `${visible.find(c => c.key === k)?.label ?? k}: ${v}`),
+    ].filter(Boolean);
+    const ordem = visible.find(c => c.key === st.sort);
+    const info = [
+      `${filtered.length} de ${rows.length} registro(s)`,
+      filtros.length && `Filtros: ${filtros.join(" · ")}`,
+      ordem && `Ordenado por ${ordem.label} (${st.dir === 1 ? "crescente" : "decrescente"})`,
+    ].filter(Boolean).join(" — ");
+    const resumo = [["Registros", filtered.length, "number"]];
+    if (statusCol){
+      const cont = new Map();
+      filtered.forEach(r => { const t = cellText(statusCol, r); cont.set(t, (cont.get(t) || 0) + 1); });
+      [...cont.entries()].sort((a, b) => b[1] - a[1]).forEach(([t, n]) => resumo.push([`${statusCol.label}: ${t}`, n, "number"]));
+    }
+    return {
+      titulo: item.label, subtitulo: info, resumo,
+      colunas: visible.map(exportCol),
+      linhas: filtered.map(row => visible.map(c => exportValue(c, row))),
+    };
   });
   container.querySelector("#importBtn")?.addEventListener("click", () => openImportModal(afterChange));
   container.querySelector("#addRowBtn")?.addEventListener("click", () => openEditor(null));

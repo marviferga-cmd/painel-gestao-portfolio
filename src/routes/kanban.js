@@ -5,7 +5,7 @@ import { MODULES } from "../modules.js";
 import { exigirTela } from "../auth.js";
 import { registrar } from "../config.js";
 import { ValidationError } from "../lib/format.js";
-import { idParam, uuidOuNull } from "../lib/http.js";
+import { httpError, idParam, uuidOuNull } from "../lib/http.js";
 
 export const kanbanApi = Router();
 
@@ -46,19 +46,37 @@ kanbanApi.post("/:board/cards", exigirTela((req) => telaDoQuadro(req.params.boar
   res.status(201).json(card);
 });
 
+/* Mover: { colunaId, posicao? } — posicao é o índice na coluna de destino (sem ele, vai para o fim).
+   Os outros cards da coluna são renumerados na mesma transação. */
 kanbanApi.patch("/cards/:id", exigirTela(telaDoCard, editar), async (req, res) => {
   const id = idParam(req);
   const data = {};
+  const reordenar = [];
   let destino = null;
   if (req.body?.colunaId !== undefined) {
+    // só move dentro do mesmo quadro: a permissão foi checada para o quadro de origem
     data.colunaId = uuidOuNull(req.body.colunaId, "Coluna");
-    destino = data.colunaId && await prisma.kanbanColuna.findUnique({ where: { id: data.colunaId } });
+    const atual = await prisma.kanbanCard.findUnique({ where: { id }, include: { coluna: { select: { quadro: true } } } });
+    if (!atual) throw httpError(404, "Registro não encontrado");
+    destino = data.colunaId && await prisma.kanbanColuna.findFirst({ where: { id: data.colunaId, quadro: atual.coluna.quadro } });
     if (!destino) throw new ValidationError("Coluna inválida");
-    data.ordem = await nextOrder(data.colunaId);
+    if (destino.id === atual.colunaId && req.body.posicao === undefined) destino = null; // nada a mover
+
+    const outros = await prisma.kanbanCard.findMany({
+      where: { colunaId: data.colunaId, id: { not: id } },
+      orderBy: [{ ordem: "asc" }, { createdAt: "asc" }],
+      select: { id: true },
+    });
+    const pos = req.body.posicao === undefined || req.body.posicao === null ? NaN : Number(req.body.posicao);
+    data.ordem = Number.isInteger(pos) ? Math.max(0, Math.min(pos, outros.length)) : outros.length;
+    outros.forEach((c, i) => {
+      const ordem = i < data.ordem ? i : i + 1;
+      reordenar.push(prisma.kanbanCard.update({ where: { id: c.id }, data: { ordem } }));
+    });
   }
   if (req.body?.titulo !== undefined) data.titulo = String(req.body.titulo).trim().slice(0, 300);
   if (req.body?.etiqueta !== undefined) data.etiqueta = String(req.body.etiqueta).trim() || null;
-  const card = await prisma.kanbanCard.update({ where: { id }, data });
+  const card = (await prisma.$transaction([...reordenar, prisma.kanbanCard.update({ where: { id }, data })])).at(-1);
   registrar(req, destino ? "moveu" : "alterou", await telaDoCard(req), destino ? `Card "${card.titulo}" → ${destino.titulo}` : `Card "${card.titulo}"`);
   res.json(card);
 });

@@ -429,3 +429,13 @@ model Atividade {
   @@index([createdAt])
   @@map("atividades")
 }
+
+// Limite de tentativas de login/cadastro/convite por IP (no banco: vale entre reinícios e instâncias).
+model LimiteTentativa {
+  chave String   @id // "<rota>|<ip>"
+  n     Int
+  ate   DateTime // fim da janela atual
+
+  @@index([ate])
+  @@map("limite_tentativas")
+}

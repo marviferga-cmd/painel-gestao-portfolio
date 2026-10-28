@@ -4,6 +4,7 @@
    RELATÓRIOS — consolidado por cliente
    ========================================================= */
 async function renderReportView(container, item){
+  const tela = App.currentKey;
   container.innerHTML = loadingHTML();
   let rows;
   try { rows = await API.get("/resumo/clientes"); }
@@ -42,12 +43,29 @@ async function renderReportView(container, item){
       </div>
     </div>
   `;
+
+  App.setExport(tela, () => ({
+    titulo: `${item.label} por cliente`,
+    subtitulo: "Calculado a partir de OS, Faturamento e Chamados",
+    resumo: [
+      ["Clientes", rows.length, "number"], ["OS abertas", tot.osAbertas, "number"],
+      ["Faturado", tot.faturado, "money"], ["A receber", tot.emAberto, "money"],
+      ["Chamados atrasados", tot.atrasados, "number"],
+    ],
+    colunas: [
+      { label: "Cliente", type: "text" }, { label: "OS (total)", type: "number" }, { label: "OS abertas", type: "number" },
+      { label: "Faturado", type: "money" }, { label: "A receber", type: "money" },
+      { label: "Chamados abertos", type: "number" }, { label: "Chamados atrasados", type: "number" },
+    ],
+    linhas: rows.map(r => [r.cliente, r.osTotal, r.osAbertas, r.faturado, r.emAberto, r.chamadosAbertos, r.chamadosAtrasados]),
+  }));
 }
 
 /* =========================================================
    INDICADORES — OS e financeiro
    ========================================================= */
 async function renderIndicatorsView(container){
+  const tela = App.currentKey;
   container.innerHTML = loadingHTML();
   let data;
   try { data = await API.get("/resumo/os"); }
@@ -84,4 +102,21 @@ async function renderIndicatorsView(container){
       </div>
     </div>
   `;
+
+  App.setExport(tela, () => ({
+    titulo: "Indicadores de ordens de serviço",
+    subtitulo: "Ordens de serviço ordenadas por prazo",
+    resumo: [
+      ["OS abertas", k.osAbertas, "number"], ["OS concluídas", k.osConcluidas, "number"],
+      ["OS fora do prazo", k.osAtrasadas, "number"], ["OS abertas por colaborador", k.osPorColaborador.toFixed(1).replace(".", ",")],
+      ["Faturado", k.faturado, "money"], ["Recebido", k.recebido, "money"],
+      ["Em aberto", k.emAberto, "money"], ["Vencido", k.vencido, "money"],
+    ],
+    colunas: [
+      { label: "OS", type: "text" }, { label: "Cliente", type: "text" }, { label: "Serviço", type: "text" },
+      { label: "Responsável", type: "text" }, { label: "Prazo", type: "date" }, { label: "Status", type: "text" },
+      { label: "Situação", type: "text" },
+    ],
+    linhas: data.ordens.map(r => [r.numero, r.cliente, r.servico, r.responsavel, r.prazo, r.status, r.atrasada ? "Atrasada" : null]),
+  }));
 }

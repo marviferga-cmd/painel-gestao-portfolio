@@ -4,6 +4,7 @@
    SLA DASHBOARD — medidor + lista de atenção
    ========================================================= */
 async function renderSlaDashboardView(container){
+  const tela = App.currentKey;
   container.innerHTML = loadingHTML();
   let d;
   try { d = await API.get("/resumo/sla"); }
@@ -71,4 +72,20 @@ async function renderSlaDashboardView(container){
     </div>
   `;
   container.querySelector("[data-go]").addEventListener("click", e => App.navigate(e.currentTarget.dataset.go));
+
+  App.setExport(tela, () => ({
+    titulo: "Monitoramento de SLA",
+    subtitulo: "Chamados abertos; tempo restante calculado no momento da exportação da tela",
+    resumo: [
+      ["Abertos no prazo", pct, "percent"], ["Chamados abertos", d.abertos, "number"],
+      ["No prazo", d.noPrazo, "number"], ["Em risco (atenção + crítico)", emRisco, "number"],
+      ["Atrasados", d.atrasado, "number"],
+      ["Concluídos no SLA (30 dias)", pct30 === null ? "Sem chamados concluídos" : pct30, pct30 === null ? "text" : "percent"],
+    ],
+    colunas: [
+      { label: "Chamado", type: "text" }, { label: "Cliente", type: "text" }, { label: "Responsável", type: "text" },
+      { label: "Prazo", type: "datetime" }, { label: "Tempo restante", type: "text" }, { label: "Risco", type: "text" },
+    ],
+    linhas: d.rows.map(r => [r.chamado, r.cliente, r.responsavel, r.prazoEm, r.tempoRestante, r.status]),
+  }));
 }

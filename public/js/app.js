@@ -31,6 +31,10 @@ const App = {
       const key = decodeURIComponent(location.hash.slice(1)) || "home";
       if (key !== this.currentKey) this.navigate(key, { replace: true });
     });
+
+    // contador de chamados em risco: atualiza sozinho enquanto a aba estiver visível
+    setInterval(() => { if (!document.hidden) this.refreshNavCounts(); }, 60e3);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) this.refreshNavCounts(); });
   },
 
   findItem(key){
@@ -133,9 +137,45 @@ const App = {
     document.getElementById("userMenu").hidden = false;
   },
 
+  /* ---------------- EXPORTAR (PDF / Excel) ----------------
+     Cada tela chama setExport(App.currentKey capturado no início do render, () => dados).
+     Ignora quem terminou de carregar depois que o usuário já trocou de tela. */
+  exportSource: null,
+
+  setExport(tela, fn){
+    if (tela !== this.currentKey) return;
+    this.exportSource = fn;
+    document.getElementById("exportMenu").hidden = !fn;
+    if (!fn) this.setExportPop(false);
+  },
+
+  setExportPop(open){
+    document.getElementById("exportPop").hidden = !open;
+    document.getElementById("exportBtn").setAttribute("aria-expanded", String(open));
+  },
+
+  async runExport(tipo){
+    this.setExportPop(false);
+    if (!this.exportSource) return;
+    const btn = document.getElementById("exportBtn");
+    btn.setAttribute("aria-busy", "true");
+    try {
+      const tela = this.findItem(this.currentKey);
+      const dados = { arquivo: this.currentKey, grupo: tela?.group.label, ...this.exportSource() };
+      await (tipo === "pdf" ? Exporter.pdf(dados) : Exporter.excel(dados));
+      toast(tipo === "pdf" ? "PDF gerado" : "Planilha gerada");
+    } catch(err){
+      console.error(err);
+      toast(err.message || "Não foi possível exportar", "bad");
+    } finally {
+      btn.removeAttribute("aria-busy");
+    }
+  },
+
   /* ---------------- NAVEGAÇÃO ---------------- */
   async navigate(key, { replace = false } = {}){
     this.currentKey = key;
+    this.setExport(key, null);
     if (!replace) history.pushState(null, "", key === "home" ? location.pathname : `#${key}`);
     document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.key === key));
     document.querySelector(".nav-home")?.classList.toggle("active", key === "home");
@@ -230,6 +270,7 @@ const App = {
     box.querySelector("#confirmTitle").textContent = title;
     box.querySelector("#confirmMsg").textContent = message;
     const ok = box.querySelector("#confirmOk");
+    const prevFocus = document.activeElement;
     ok.textContent = confirmLabel;
     ok.className = `btn ${danger ? "btn-danger" : "btn-primary"}`;
     box.hidden = false;
@@ -239,9 +280,13 @@ const App = {
         box.hidden = true;
         box.onclick = null;
         document.removeEventListener("keydown", onKey, true);
+        prevFocus?.focus?.();
         resolve(v);
       };
-      const onKey = (e) => { if (e.key === "Escape"){ e.stopPropagation(); done(false); } };
+      const onKey = (e) => {
+        if (e.key === "Escape"){ e.stopPropagation(); done(false); }
+        else if (e.key === "Tab"){ e.stopPropagation(); trapFocus(e, box.querySelector(".confirm")); }
+      };
       document.addEventListener("keydown", onKey, true);
       box.onclick = (e) => {
         if (e.target === box || e.target.closest("#confirmCancel")) done(false);
@@ -258,7 +303,10 @@ const App = {
     document.querySelector("#modalBackdrop .modal").classList.toggle("modal-wide", wide);
     form.onsubmit = null;
     form.innerHTML = "";
-    document.getElementById("modalBackdrop").classList.add("open");
+    const backdrop = document.getElementById("modalBackdrop");
+    if (!backdrop.classList.contains("open")) this.lastFocus = document.activeElement;
+    this.dirtyCheck = null;
+    backdrop.classList.add("open");
     return form;
   },
 
@@ -278,7 +326,7 @@ const App = {
     }
 
     const init = initialValues || {};
-    const campos = fields.map(f => this.fieldHTML(f, init[f.key], lookups)).join("");
+    const campos = fields.map(f => this.fieldHTML(f, init[f.key], lookups, init)).join("");
     form.innerHTML = (grid ? `<div class="form-grid">${campos}</div>` : campos)
       + `<p class="form-error" id="formError" hidden></p>`
       + `<div class="modal-actions">`
@@ -287,10 +335,15 @@ const App = {
       + `<button type="button" class="btn" id="modalCancel">Cancelar</button>`
       + `<button type="submit" class="btn btn-primary modal-submit">Salvar</button></div>`;
 
+    // fechar com alterações não salvas pede confirmação
+    const snapshot = () => fields.map(f => form.elements.namedItem(f.key)?.value ?? "").join("\u0000");
+    const inicial = snapshot();
+    this.dirtyCheck = () => snapshot() !== inicial;
+
     const errorEl = form.querySelector("#formError");
     const submitBtn = form.querySelector(".modal-submit");
     const showError = (msg) => { errorEl.textContent = msg; errorEl.hidden = false; };
-    form.querySelector("#modalCancel").addEventListener("click", () => this.closeModal());
+    form.querySelector("#modalCancel").addEventListener("click", () => this.requestCloseModal());
 
     form.onsubmit = async (e) => {
       e.preventDefault();
@@ -331,7 +384,7 @@ const App = {
     form.querySelector("input,select")?.focus();
   },
 
-  fieldHTML(f, current, lookups){
+  fieldHTML(f, current, lookups, init = {}){
     const id = `f_${f.key}`;
     const req = f.required ? "required" : "";
     const star = f.required ? ` <span class="req">*</span>` : "";
@@ -341,10 +394,15 @@ const App = {
       `<option value="${esc(o.value)}" ${String(o.value) === String(selected ?? "") ? "selected" : ""}>${esc(o.label)}</option>`).join("");
 
     switch (f.type){
-      case "ref":
+      case "ref": {
+        // a lista omite inativos e itens antigos; sem isto o vínculo atual sumiria ao salvar
+        const list = lookups[f.ref] || [];
+        const missing = current !== null && current !== undefined && !list.some(o => String(o.value) === String(current));
+        const full = missing ? [{ value: current, label: `${init._labels?.[f.key] ?? "Registro atual"} (inativo)` }, ...list] : list;
         return wrap(`<select id="${id}" name="${esc(f.key)}" ${req}>
           <option value="">${f.required ? "Selecione…" : "— nenhum —"}</option>
-          ${opts(lookups[f.ref] || [], current)}</select>`);
+          ${opts(full, current)}</select>`);
+      }
       case "select":
         return wrap(`<select id="${id}" name="${esc(f.key)}" ${req}>${opts(f.options, current)}</select>`);
       case "status":
@@ -375,8 +433,20 @@ const App = {
     }
   },
 
+  dirtyCheck: null,
+  lastFocus: null,
+
   closeModal(){
+    this.dirtyCheck = null;
     document.getElementById("modalBackdrop").classList.remove("open");
+    this.lastFocus?.focus?.();
+    this.lastFocus = null;
+  },
+
+  /* fechar pelo ×, Esc, Cancelar ou clique fora: confirma se houver alterações não salvas */
+  async requestCloseModal(){
+    if (this.dirtyCheck?.() && !(await this.confirm({ title: "Descartar alterações?", message: "As alterações feitas neste formulário serão perdidas.", confirmLabel: "Descartar", danger: true }))) return;
+    this.closeModal();
   },
 
   /* ---------------- TEMA CLARO / ESCURO ---------------- */
@@ -393,12 +463,21 @@ const App = {
   },
 
   wireGlobalEvents(){
-    document.getElementById("modalClose").addEventListener("click", () => this.closeModal());
+    document.getElementById("modalClose").addEventListener("click", () => this.requestCloseModal());
     document.getElementById("modalBackdrop").addEventListener("mousedown", (e) => {
-      if (e.target.id === "modalBackdrop") this.closeModal();
+      if (e.target.id === "modalBackdrop") this.requestCloseModal();
     });
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape"){ this.closeModal(); this.closePalette(); }
+      const modalOpen = document.getElementById("modalBackdrop").classList.contains("open");
+      const paletteOpen = !document.getElementById("palette").hidden;
+      if (e.key === "Escape"){
+        if (paletteOpen) this.closePalette();
+        else if (modalOpen) this.requestCloseModal();
+      }
+      if (e.key === "Tab"){
+        if (paletteOpen) trapFocus(e, document.querySelector("#palette .palette"));
+        else if (modalOpen) trapFocus(e, document.querySelector("#modalBackdrop .modal"));
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k" && this.meta){ e.preventDefault(); this.openPalette(); }
     });
     document.getElementById("navToggle").addEventListener("click", () => document.body.classList.toggle("nav-open"));
@@ -418,6 +497,13 @@ const App = {
       try { saved = localStorage.getItem("theme"); } catch {}
       if (!saved) this.setTheme(e.matches ? "light" : "dark");
     });
+
+    const exportBtn = document.getElementById("exportBtn");
+    const exportPop = document.getElementById("exportPop");
+    exportBtn.addEventListener("click", (e) => { e.stopPropagation(); this.setExportPop(exportPop.hidden); });
+    exportPop.querySelectorAll("[data-export]").forEach(b => b.addEventListener("click", () => this.runExport(b.dataset.export)));
+    document.addEventListener("click", (e) => { if (!exportPop.hidden && !exportPop.contains(e.target)) this.setExportPop(false); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") this.setExportPop(false); });
 
     const chip = document.getElementById("userChip");
     const pop = document.getElementById("userPop");

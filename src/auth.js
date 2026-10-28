@@ -153,21 +153,37 @@ async function usuarioDoLink(token) {
   return u;
 }
 
-/* ---------------- limite de tentativas (memória, por IP) ---------------- */
-const tentativas = new Map();
-function limiteTentativas(max, janelaMin) {
-  return (req, res, next) => {
-    const agora = Date.now();
-    const chave = `${req.path}|${req.ip}`;
-    const t = tentativas.get(chave);
-    if (!t || t.ate < agora) tentativas.set(chave, { n: 1, ate: agora + janelaMin * 60e3 });
-    else if (++t.n > max) return res.status(429).json({ error: "Muitas tentativas. Aguarde alguns minutos e tente de novo." });
+/* ---------------- limite de tentativas (no banco, por IP) ----------------
+   No banco para valer entre reinícios/deploys e com mais de uma instância.
+   soErros: só conta as respostas de erro (login: quem acerta a senha não gasta tentativa). */
+async function excedeuLimite(chave, max) {
+  const t = await prisma.limiteTentativa.findUnique({ where: { chave } });
+  return !!t && t.ate > new Date() && t.n >= max;
+}
+
+async function registrarTentativa(chave, janelaMin) {
+  const agora = new Date();
+  const t = await prisma.limiteTentativa.findUnique({ where: { chave } });
+  if (t && t.ate > agora) {
+    await prisma.limiteTentativa.update({ where: { chave }, data: { n: { increment: 1 } } });
+    return;
+  }
+  const ate = new Date(agora.getTime() + janelaMin * 60e3);
+  await prisma.limiteTentativa.upsert({ where: { chave }, create: { chave, n: 1, ate }, update: { n: 1, ate } });
+}
+
+function limiteTentativas(max, janelaMin, { soErros = false } = {}) {
+  return async (req, res, next) => {
+    // rota declarada (ex.: /convite/:token), para o token na URL não abrir uma janela nova a cada link
+    const chave = `${req.route?.path ?? req.path}|${req.ip}`;
+    if (await excedeuLimite(chave, max)) return res.status(429).json({ error: "Muitas tentativas. Aguarde alguns minutos e tente de novo." });
+    if (!soErros) await registrarTentativa(chave, janelaMin);
+    else res.on("finish", () => { if (res.statusCode >= 400) registrarTentativa(chave, janelaMin).catch(() => {}); });
     next();
   };
 }
 setInterval(() => {
-  const agora = Date.now();
-  for (const [k, t] of tentativas) if (t.ate < agora) tentativas.delete(k);
+  prisma.limiteTentativa.deleteMany({ where: { ate: { lt: new Date() } } }).catch(() => {});
 }, 10 * 60e3).unref();
 
 /* ---------------- validação ---------------- */
@@ -187,7 +203,7 @@ authApi.get("/config", async (req, res) => {
   res.json(await configPublica());
 });
 
-authApi.post("/login", limiteTentativas(10, 15), async (req, res) => {
+authApi.post("/login", limiteTentativas(10, 15, { soErros: true }), async (req, res) => {
   const email = normEmail(req.body?.email);
   const senha = String(req.body?.senha ?? "");
   const usuario = email ? await prisma.usuario.findUnique({ where: { email } }) : null;

@@ -2,11 +2,11 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
 import { exigirTela, podeVer } from "../auth.js";
+import { OS_FINALIZADAS } from "../modules.js";
 import { slaStatus, tempoRestante, todayDate } from "../lib/format.js";
 
 export const resumosApi = Router();
 
-const OS_FINALIZADAS = ["Concluída", "Cancelada"];
 const soma = (arr) => arr.reduce((s, f) => s + Number(f.valor), 0);
 const nomeSel = { select: { nome: true } };
 
@@ -54,6 +54,7 @@ resumosApi.get("/geral", async (req, res) => {
     const minima = cargos.reduce((s, c) => s + c.equipeMinima, 0);
     const ocupados = cargos.reduce((s, c) => s + Math.min(c._count.colaboradores, c.equipeMinima), 0);
     const abaixo = cargos.filter((c) => c._count.colaboradores < c.equipeMinima);
+    if (!minima) return; // sem equipe mínima cadastrada, não há cobertura a mostrar
     out.blocos.contrato = { equipeMinima: minima, ocupados, cargosAbaixo: abaixo.length, cargos: cargos.length };
     if (abaixo.length) pend("warn", `${abaixo.length} cargo(s) do contrato abaixo da equipe mínima`, "cargos-salarios");
   })());

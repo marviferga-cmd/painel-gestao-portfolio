@@ -11,6 +11,7 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
 import { publicMeta } from "../modules.js";
+import { MAX_ROWS } from "../crud.js";
 import { seed } from "../../prisma/seed.js";
 import { authApi, carregarUsuario, exigirAdmin, exigirLogin, nivelAcesso, podeVer, usuarioPublico } from "../auth.js";
 import { configPublica, registrar } from "../config.js";
@@ -53,6 +54,7 @@ api.get("/meta", async (req, res) => {
     ...meta,
     versao: process.env.npm_package_version ?? null,
     config: await configPublica(),
+    maxRows: MAX_ROWS,
     user: { ...usuarioPublico(req.user), perfil: req.user.perfil?.nome ?? null },
     allowReset: allowReset() && req.user.papel === "admin",
   });
